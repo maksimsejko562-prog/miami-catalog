@@ -9,6 +9,21 @@
       "id": "guns",
       "label": "Оружие",
       "icon": "crosshair"
+    },
+    {
+      "id": "clothes",
+      "label": "Одежда",
+      "icon": "users"
+    },
+    {
+      "id": "maps",
+      "label": "Карты",
+      "icon": "map"
+    },
+    {
+      "id": "sounds",
+      "label": "Звуки оружия",
+      "icon": "volume2"
     }
   ],
   "mods": [
@@ -3411,6 +3426,369 @@
       "download_url": "https://reduxlab.ru/mod/realistic-killa-gunpack-v2-majestic",
       "file_size_label": "55.7 MB",
       "downloads": 539
+    },
+    {
+      "name": "Cross Killa Armor",
+      "description": "Cross Killa Armor — мод для GTA 5 RP",
+      "image_url": "https://raw.githubusercontent.com/maksimsejko562-prog/miami-mods/main/thumbs/cross-killa-armor.webp",
+      "file_size_label": "",
+      "downloads": 0,
+      "page_url": "https://reduxlab.ru/mod/cross-killa-armor",
+      "author": "Redux Lab",
+      "category": "clothes",
+      "id": 341
+    },
+    {
+      "name": "Outline Armor For 5rp",
+      "description": "Outline Armor For 5rp — мод для GTA 5 RP",
+      "image_url": "https://raw.githubusercontent.com/maksimsejko562-prog/miami-mods/main/thumbs/outline-armor-for-5rp.webp",
+      "file_size_label": "",
+      "downloads": 0,
+      "page_url": "https://reduxlab.ru/mod/outline-armor-for-5rp",
+      "author": "Redux Lab",
+      "category": "clothes",
+      "id": 342
+    },
+    {
+      "name": "Outline Armor For Majestic",
+      "description": "Outline Armor For Majestic — мод для GTA 5 RP",
+      "image_url": "https://raw.githubusercontent.com/maksimsejko562-prog/miami-mods/main/thumbs/outline-armor-for-majestic.webp",
+      "file_size_label": "",
+      "downloads": 0,
+      "page_url": "https://reduxlab.ru/mod/outline-armor-for-majestic",
+      "author": "Redux Lab",
+      "category": "clothes",
+      "id": 343
+    },
+    {
+      "name": "Alpha Armor By Xero",
+      "description": "Alpha Armor By Xero — мод для GTA 5 RP",
+      "image_url": "https://raw.githubusercontent.com/maksimsejko562-prog/miami-mods/main/thumbs/alpha-armor-by-xero.webp",
+      "file_size_label": "",
+      "downloads": 0,
+      "page_url": "https://reduxlab.ru/mod/alpha-armor-by-xero",
+      "author": "Redux Lab",
+      "category": "clothes",
+      "id": 344
+    },
+    {
+      "name": "Vultures Armor Majestic Rp",
+      "description": "Vultures Armor Majestic Rp — мод для GTA 5 RP",
+      "image_url": "https://raw.githubusercontent.com/maksimsejko562-prog/miami-mods/main/thumbs/vultures-armor-majestic-rp.webp",
+      "file_size_label": "",
+      "downloads": 0,
+      "page_url": "https://reduxlab.ru/mod/vultures-armor-majestic-rp",
+      "author": "Redux Lab",
+      "category": "clothes",
+      "id": 345
+    },
+    {
+      "name": "Clxn 95 Armor",
+      "description": "Clxn 95 Armor — мод для GTA 5 RP",
+      "image_url": "https://raw.githubusercontent.com/maksimsejko562-prog/miami-mods/main/thumbs/clxn-95-armor.webp",
+      "file_size_label": "",
+      "downloads": 0,
+      "page_url": "https://reduxlab.ru/mod/clxn-95-armor",
+      "author": "Redux Lab",
+      "category": "clothes",
+      "id": 346
+    },
+    {
+      "name": "Charms Rose Armor",
+      "description": "Charms Rose Armor — мод для GTA 5 RP",
+      "image_url": "https://raw.githubusercontent.com/maksimsejko562-prog/miami-mods/main/thumbs/charms-rose-armor.webp",
+      "file_size_label": "",
+      "downloads": 0,
+      "page_url": "https://reduxlab.ru/mod/charms-rose-armor",
+      "author": "Redux Lab",
+      "category": "clothes",
+      "id": 347
+    },
+    {
+      "name": "Flow Armor",
+      "description": "Flow Armor — мод для GTA 5 RP",
+      "image_url": "https://raw.githubusercontent.com/maksimsejko562-prog/miami-mods/main/thumbs/flow-armor.webp",
+      "file_size_label": "",
+      "downloads": 0,
+      "page_url": "https://reduxlab.ru/mod/flow-armor",
+      "author": "Redux Lab",
+      "category": "clothes",
+      "id": 348
+    },
+    {
+      "name": "White Sword Armor Majestic X 5rp",
+      "description": "White Sword Armor Majestic X 5rp — мод для GTA 5 RP",
+      "image_url": "https://raw.githubusercontent.com/maksimsejko562-prog/miami-mods/main/thumbs/white-sword-armor-majestic-x-5rp.webp",
+      "file_size_label": "",
+      "downloads": 0,
+      "page_url": "https://reduxlab.ru/mod/white-sword-armor-majestic-x-5rp",
+      "author": "Redux Lab",
+      "category": "clothes",
+      "id": 349
+    },
+    {
+      "name": "Beda Clxn Armor",
+      "description": "Beda Clxn Armor — мод для GTA 5 RP",
+      "image_url": "https://raw.githubusercontent.com/maksimsejko562-prog/miami-mods/main/thumbs/beda-clxn-armor.webp",
+      "file_size_label": "",
+      "downloads": 0,
+      "page_url": "https://reduxlab.ru/mod/beda-clxn-armor",
+      "author": "Redux Lab",
+      "category": "clothes",
+      "id": 350
+    },
+    {
+      "name": "Bones Killa Armor",
+      "description": "Bones Killa Armor — мод для GTA 5 RP",
+      "image_url": "https://raw.githubusercontent.com/maksimsejko562-prog/miami-mods/main/thumbs/bones-killa-armor.webp",
+      "file_size_label": "",
+      "downloads": 0,
+      "page_url": "https://reduxlab.ru/mod/bones-killa-armor",
+      "author": "Redux Lab",
+      "category": "clothes",
+      "id": 351
+    },
+    {
+      "name": "Noir Killa Armor",
+      "description": "Noir Killa Armor — мод для GTA 5 RP",
+      "image_url": "https://raw.githubusercontent.com/maksimsejko562-prog/miami-mods/main/thumbs/noir-killa-armor.webp",
+      "file_size_label": "",
+      "downloads": 0,
+      "page_url": "https://reduxlab.ru/mod/noir-killa-armor",
+      "author": "Redux Lab",
+      "category": "clothes",
+      "id": 352
+    },
+    {
+      "name": "Yeezy Armor",
+      "description": "Yeezy Armor — мод для GTA 5 RP",
+      "image_url": "https://raw.githubusercontent.com/maksimsejko562-prog/miami-mods/main/thumbs/yeezy-armor.webp",
+      "file_size_label": "",
+      "downloads": 0,
+      "page_url": "https://reduxlab.ru/mod/yeezy-armor",
+      "author": "Redux Lab",
+      "category": "clothes",
+      "id": 353
+    },
+    {
+      "name": "Killa Gos Armor",
+      "description": "Killa Gos Armor — мод для GTA 5 RP",
+      "image_url": "https://raw.githubusercontent.com/maksimsejko562-prog/miami-mods/main/thumbs/killa-gos-armor.webp",
+      "file_size_label": "",
+      "downloads": 0,
+      "page_url": "https://reduxlab.ru/mod/killa-gos-armor",
+      "author": "Redux Lab",
+      "category": "clothes",
+      "id": 354
+    },
+    {
+      "name": "Charms V2 Seringai Armor",
+      "description": "Charms V2 Seringai Armor — мод для GTA 5 RP",
+      "image_url": "https://raw.githubusercontent.com/maksimsejko562-prog/miami-mods/main/thumbs/charms-v2-seringai-armor.webp",
+      "file_size_label": "",
+      "downloads": 0,
+      "page_url": "https://reduxlab.ru/mod/charms-v2-seringai-armor",
+      "author": "Redux Lab",
+      "category": "clothes",
+      "id": 355
+    },
+    {
+      "name": "Lighthouse Killa Armor",
+      "description": "Lighthouse Killa Armor — мод для GTA 5 RP",
+      "image_url": "https://raw.githubusercontent.com/maksimsejko562-prog/miami-mods/main/thumbs/lighthouse-killa-armor.webp",
+      "file_size_label": "",
+      "downloads": 0,
+      "page_url": "https://reduxlab.ru/mod/lighthouse-killa-armor",
+      "author": "Redux Lab",
+      "category": "clothes",
+      "id": 356
+    },
+    {
+      "name": "Flow Rose Armor Black",
+      "description": "Flow Rose Armor Black — мод для GTA 5 RP",
+      "image_url": "https://raw.githubusercontent.com/maksimsejko562-prog/miami-mods/main/thumbs/flow-rose-armor-black.webp",
+      "file_size_label": "",
+      "downloads": 0,
+      "page_url": "https://reduxlab.ru/mod/flow-rose-armor-black",
+      "author": "Redux Lab",
+      "category": "clothes",
+      "id": 357
+    },
+    {
+      "name": "Black Map Terny",
+      "description": "Black Map Terny — мод для GTA 5 RP",
+      "image_url": "https://raw.githubusercontent.com/maksimsejko562-prog/miami-mods/main/thumbs/black-map-terny.webp",
+      "file_size_label": "",
+      "downloads": 0,
+      "page_url": "https://reduxlab.ru/mod/black-map-terny",
+      "author": "Redux Lab",
+      "category": "maps",
+      "id": 358
+    },
+    {
+      "name": "Maps Mcl Names",
+      "description": "Maps Mcl Names — мод для GTA 5 RP",
+      "image_url": "https://raw.githubusercontent.com/maksimsejko562-prog/miami-mods/main/thumbs/maps-mcl-names.webp",
+      "file_size_label": "",
+      "downloads": 0,
+      "page_url": "https://reduxlab.ru/mod/maps-mcl-names",
+      "author": "Redux Lab",
+      "category": "maps",
+      "id": 359
+    },
+    {
+      "name": "Vector Map Gussi No Logo",
+      "description": "Vector Map Gussi No Logo — мод для GTA 5 RP",
+      "image_url": "https://raw.githubusercontent.com/maksimsejko562-prog/miami-mods/main/thumbs/vector-map-gussi-no-logo.webp",
+      "file_size_label": "",
+      "downloads": 0,
+      "page_url": "https://reduxlab.ru/mod/vector-map-gussi-no-logo",
+      "author": "Redux Lab",
+      "category": "maps",
+      "id": 360
+    },
+    {
+      "name": "Best Mcl Map",
+      "description": "Best Mcl Map — мод для GTA 5 RP",
+      "image_url": "https://raw.githubusercontent.com/maksimsejko562-prog/miami-mods/main/thumbs/best-mcl-map.webp",
+      "file_size_label": "",
+      "downloads": 0,
+      "page_url": "https://reduxlab.ru/mod/best-mcl-map",
+      "author": "Redux Lab",
+      "category": "maps",
+      "id": 361
+    },
+    {
+      "name": "Black Vector Map",
+      "description": "Black Vector Map — мод для GTA 5 RP",
+      "image_url": "https://raw.githubusercontent.com/maksimsejko562-prog/miami-mods/main/thumbs/black-vector-map.webp",
+      "file_size_label": "",
+      "downloads": 0,
+      "page_url": "https://reduxlab.ru/mod/black-vector-map",
+      "author": "Redux Lab",
+      "category": "maps",
+      "id": 362
+    },
+    {
+      "name": "Vector Map Mcl",
+      "description": "Vector Map Mcl — мод для GTA 5 RP",
+      "image_url": "https://raw.githubusercontent.com/maksimsejko562-prog/miami-mods/main/thumbs/vector-map-mcl.webp",
+      "file_size_label": "",
+      "downloads": 0,
+      "page_url": "https://reduxlab.ru/mod/vector-map-mcl",
+      "author": "Redux Lab",
+      "category": "maps",
+      "id": 363
+    },
+    {
+      "name": "Multi Karta Fletcher",
+      "description": "Multi Karta Fletcher — мод для GTA 5 RP",
+      "image_url": "https://raw.githubusercontent.com/maksimsejko562-prog/miami-mods/main/thumbs/multi-karta-fletcher.webp",
+      "file_size_label": "",
+      "downloads": 0,
+      "page_url": "https://reduxlab.ru/mod/multi-karta-fletcher",
+      "author": "Redux Lab",
+      "category": "maps",
+      "id": 364
+    },
+    {
+      "name": "Extinguished Gunsounds",
+      "description": "Extinguished Gunsounds — мод для GTA 5 RP",
+      "image_url": "https://raw.githubusercontent.com/maksimsejko562-prog/miami-mods/main/thumbs/extinguished-gunsounds.webp",
+      "file_size_label": "",
+      "downloads": 0,
+      "page_url": "https://reduxlab.ru/mod/extinguished-gunsounds",
+      "author": "Redux Lab",
+      "category": "sounds",
+      "id": 365
+    },
+    {
+      "name": "Dafi Charms Big Sound Pack",
+      "description": "Dafi Charms Big Sound Pack — мод для GTA 5 RP",
+      "image_url": "https://raw.githubusercontent.com/maksimsejko562-prog/miami-mods/main/thumbs/dafi-charms-big-sound-pack.webp",
+      "file_size_label": "",
+      "downloads": 0,
+      "page_url": "https://reduxlab.ru/mod/dafi-charms-big-sound-pack",
+      "author": "Redux Lab",
+      "category": "sounds",
+      "id": 366
+    },
+    {
+      "name": "Desolator Size Sounds Private",
+      "description": "Desolator Size Sounds Private — мод для GTA 5 RP",
+      "image_url": "https://raw.githubusercontent.com/maksimsejko562-prog/miami-mods/main/thumbs/desolator-size-sounds-private.webp",
+      "file_size_label": "",
+      "downloads": 0,
+      "page_url": "https://reduxlab.ru/mod/desolator-size-sounds-private",
+      "author": "Redux Lab",
+      "category": "sounds",
+      "id": 367
+    },
+    {
+      "name": "Kira Zombi X Leks11k Soundpack Novye Zvuki Dlia Gta5rp Majestic",
+      "description": "Kira Zombi X Leks11k Soundpack Novye Zvuki Dlia Gta5rp Majestic — мод для GTA 5 RP",
+      "image_url": "https://raw.githubusercontent.com/maksimsejko562-prog/miami-mods/main/thumbs/kira-zombi-x-leks11k-soundpack-novye-zvuki-dlia-gta5rp-majestic.webp",
+      "file_size_label": "",
+      "downloads": 0,
+      "page_url": "https://reduxlab.ru/mod/kira-zombi-x-leks11k-soundpack-novye-zvuki-dlia-gta5rp-majestic",
+      "author": "Redux Lab",
+      "category": "sounds",
+      "id": 368
+    },
+    {
+      "name": "Lex Aura Sounds",
+      "description": "Lex Aura Sounds — мод для GTA 5 RP",
+      "image_url": "https://raw.githubusercontent.com/maksimsejko562-prog/miami-mods/main/thumbs/lex-aura-sounds.webp",
+      "file_size_label": "",
+      "downloads": 0,
+      "page_url": "https://reduxlab.ru/mod/lex-aura-sounds",
+      "author": "Redux Lab",
+      "category": "sounds",
+      "id": 369
+    },
+    {
+      "name": "Killa Clicky Sound Privat",
+      "description": "Killa Clicky Sound Privat — мод для GTA 5 RP",
+      "image_url": "https://raw.githubusercontent.com/maksimsejko562-prog/miami-mods/main/thumbs/killa-clicky-sound-privat.webp",
+      "file_size_label": "",
+      "downloads": 0,
+      "page_url": "https://reduxlab.ru/mod/killa-clicky-sound-privat",
+      "author": "Redux Lab",
+      "category": "sounds",
+      "id": 370
+    },
+    {
+      "name": "Sound By Roxieee",
+      "description": "Sound By Roxieee — мод для GTA 5 RP",
+      "image_url": "https://raw.githubusercontent.com/maksimsejko562-prog/miami-mods/main/thumbs/sound-by-roxieee.webp",
+      "file_size_label": "",
+      "downloads": 0,
+      "page_url": "https://reduxlab.ru/mod/sound-by-roxieee",
+      "author": "Redux Lab",
+      "category": "sounds",
+      "id": 371
+    },
+    {
+      "name": "Silenced Sounds V2",
+      "description": "Silenced Sounds V2 — мод для GTA 5 RP",
+      "image_url": "https://raw.githubusercontent.com/maksimsejko562-prog/miami-mods/main/thumbs/silenced-sounds-v2.webp",
+      "file_size_label": "",
+      "downloads": 0,
+      "page_url": "https://reduxlab.ru/mod/silenced-sounds-v2",
+      "author": "Redux Lab",
+      "category": "sounds",
+      "id": 372
+    },
+    {
+      "name": "Silenced Sounds",
+      "description": "Silenced Sounds — мод для GTA 5 RP",
+      "image_url": "https://raw.githubusercontent.com/maksimsejko562-prog/miami-mods/main/thumbs/silenced-sounds.webp",
+      "file_size_label": "",
+      "downloads": 0,
+      "page_url": "https://reduxlab.ru/mod/silenced-sounds",
+      "author": "Redux Lab",
+      "category": "sounds",
+      "id": 373
     }
   ]
 }
