@@ -5,32 +5,37 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  // Управление окном (безрамочный titlebar).
+  // Управление окном
   minimize: () => ipcRenderer.send('win-minimize'),
   close: () => ipcRenderer.send('win-close'),
 
-  // Путь к папке загрузок (нативный, без FSA-пикера).
-  getDownloadsDir: () => ipcRenderer.invoke('get-downloads-dir'),
-
-  // Чтение локального файла приложения (catalog.json и т.д.) через fs.
-  readAppFile: (relPath) => ipcRenderer.invoke('read-app-file', relPath),
-
-  // Версия приложения
+  // Версия
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
 
-  // Проверка обновлений через GitHub API
+  // Каталог
+  readAppFile: (relPath) => ipcRenderer.invoke('read-app-file', relPath),
+
+  // Обновления
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
 
-  // Скачивание файла через main-процесс (обходит CORS)
+  // --- Скачивание ---
+  // Скачать файл (сохраняется в %APPDATA%/MiamiGraphics/)
   electronDownload: (url, filename) => ipcRenderer.invoke('electron-download', url, filename),
 
-  // Проверка существования файла
+  // Проверить, существует ли файл
   electronFileExists: (filename) => ipcRenderer.invoke('electron-file-exists', filename),
 
-  // Прогресс скачивания (события от main)
+  // Прогресс скачивания (события от main к renderer)
   onDownloadProgress: (callback) => {
     const handler = (_event, data) => callback(data);
     ipcRenderer.on('download-progress', handler);
     return () => ipcRenderer.removeListener('download-progress', handler);
   },
+
+  // --- Установка ---
+  // Автоопределить путь GTA 5
+  detectGtaPath: () => ipcRenderer.invoke('detect-gta-path'),
+
+  // Установить мод: копирует/распаковывает файл из папки загрузок в GTA5/mods/
+  electronInstallMod: (params) => ipcRenderer.invoke('electron-install-mod', params),
 });

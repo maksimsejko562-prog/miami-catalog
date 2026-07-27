@@ -305,7 +305,142 @@ ipcMain.handle('electron-download', async (evt, url, filename) => {
   });
 });
 
-// ─── IPC: Чтение локального файла приложения ──────────────────────
+// ─── IPC: Автоопределение пути GTA 5 ──────────────────────────────
+// Проверяет Steam, Epic Games, Rockstar и общие пути установки.
+
+const COMMON_GTA_PATHS = [
+  // Steam (по умолчанию)
+  'C:\\Program Files (x86)\\Steam\\steamapps\\common\\Grand Theft Auto V',
+  'C:\\Program Files\\Steam\\steamapps\\common\\Grand Theft Auto V',
+  // Steam на других дисках (основные буквы)
+  'D:\\SteamLibrary\\steamapps\\common\\Grand Theft Auto V',
+  'E:\\SteamLibrary\\steamapps\\common\\Grand Theft Auto V',
+  // Epic Games
+  'C:\\Program Files\\Epic Games\\GTAV',
+  // Rockstar Games Launcher
+  'C:\\Program Files\\Rockstar Games\\Grand Theft Auto V',
+  'C:\\ProgramData\\Rockstar Games\\Grand Theft Auto V',
+  // Пользовательские
+  'D:\\Games\\Grand Theft Auto V',
+  'E:\\Games\\Grand Theft Auto V',
+];
+
+function getSteamPathFromRegistry() {
+  try {
+    const { execSync } = require('child_process');
+    const out = execSync(
+      'reg query "HKCU\\Software\\Valve\\Steam" /v SteamPath 2>nul',
+      { encoding: 'utf-8', timeout: 5000 }
+    );
+    const match = out.match(/SteamPath\s+REG_SZ\s+(.+)/i);
+    if (match) {
+      const steamPath = match[1].trim().replace(/\\\\/g, '\\');
+      return path.join(steamPath, 'steamapps', 'common', 'Grand Theft Auto V');
+    }
+  } catch {}
+  return null;
+}
+
+ipcMain.handle('detect-gta-path', () => {
+  const MARKER_FILES = ['GTA5.exe', 'PlayGTAV.exe', 'Grand Theft Auto V.exe'];
+
+  // 1. Steam через реестр
+  const steamPath = getSteamPathFromRegistry();
+  if (steamPath && fs.existsSync(steamPath) && MARKER_FILES.some(f => fs.existsSync(path.join(steamPath, f)))) {
+    return { path: steamPath, source: 'steam' };
+  }
+
+  // 2. Общие пути
+  for (const p of COMMON_GTA_PATHS) {
+    if (fs.existsSync(p) && MARKER_FILES.some(f => fs.existsSync(path.join(p, f)))) {
+      return { path: p, source: 'common' };
+    }
+  }
+
+  // 3. Расширенный поиск по дискам C: и D:
+  try {
+    for (const drive of ['C:', 'D:']) {
+      const dirs = fs.readdirSync(drive + '\\');
+      for (const dir of dirs) {
+        const candidate = path.join(drive + '\\', dir, 'Grand Theft Auto V');
+        if (fs.existsSync(candidate) && MARKER_FILES.some(f => fs.existsSync(path.join(candidate, f)))) {
+          return { path: candidate, source: 'scan' };
+        }
+      }
+    }
+  } catch {}
+
+  return { path: null, source: null };
+});
+
+// ─── IPC: Установка мода через main-процесс (Electron) ────────────
+// Копирует/распаковывает скачанный файл из папки загрузок в GTA5/mods/
+
+const { execSync } = require('child_process');
+
+ipcMain.handle('electron-install-mod', async (_evt, {
+  downloadFilename, gtaPath, category, modId,
+}) => {
+  const srcDir = getDownloadsDir();
+  const srcPath = path.join(srcDir, downloadFilename);
+
+  if (!fs.existsSync(srcPath)) {
+    throw new Error(`Файл не найден: ${srcPath}`);
+  }
+
+  // Цель: GTA5/mods/<category>/<modId>/
+  const modsDir = path.join(gtaPath, 'mods');
+  if (!fs.existsSync(modsDir)) fs.mkdirSync(modsDir, { recursive: true });
+  const targetDir = path.join(modsDir, category, String(modId));
+  if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+
+  const lower = downloadFilename.toLowerCase();
+  const isZip = lower.endsWith('.zip');
+  const isRar = lower.endsWith('.rar');
+  const isSplit = lower.includes('.part');
+
+  if (isZip) {
+    // Распаковка ZIP через PowerShell (Expand-Archive)
+    const dest = targetDir;
+    execSync(
+      `powershell -NoProfile -Command "Expand-Archive -Path '${srcPath}' -DestinationPath '${dest}' -Force"`,
+      { stdio: 'pipe', timeout: 300000 }
+    );
+    return { success: true, targetDir, extracted: true };
+  }
+
+  if (isRar && !isSplit) {
+    // Распаковка RAR через WinRAR если доступен
+    const rarPath = 'C:\\Program Files\\WinRAR\\UnRAR.exe';
+    const altRarPath = 'C:\\Program Files (x86)\\WinRAR\\UnRAR.exe';
+    if (fs.existsSync(rarPath) || fs.existsSync(altRarPath)) {
+      const exe = fs.existsSync(rarPath) ? rarPath : altRarPath;
+      execSync(
+        `"${exe}" x -o+ "${srcPath}" "${targetDir}\\*.rar"`,
+        { stdio: 'pipe', timeout: 300000 }
+      );
+      return { success: true, targetDir, extracted: true };
+    }
+    // Если WinRAR нет — копируем как есть
+    const destPath = path.join(targetDir, path.basename(downloadFilename));
+    fs.copyFileSync(srcPath, destPath);
+    return { success: true, targetDir, extracted: false };
+  }
+
+  // Копирование (для .rpf, .oiv, .partX.rar и прочих)
+  const destPath = path.join(targetDir, path.basename(downloadFilename));
+  fs.copyFileSync(srcPath, destPath);
+  return { success: true, targetDir, extracted: false };
+});
+
+ipcMain.handle('electron-check-gta-path', () => {
+  if (!global.__gtaPath) return null;
+  const p = global.__gtaPath;
+  if (fs.existsSync(p)) return p;
+  return null;
+});
+
+// ─── Чтение локального файла приложения ──────────────────────────
 
 ipcMain.handle('read-app-file', async (_evt, relPath) => {
   if (typeof relPath !== 'string') return null;

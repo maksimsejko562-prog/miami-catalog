@@ -1,35 +1,32 @@
 /**
- * Менеджер загрузок с поддержкой:
- * - File System Access API (основной путь) — работает через localhost в Electron;
- * - Electron IPC (запасной) — скачивание через main-процесс без FSA;
- * - fallback — браузерный <a download>;
- * - resume по HTTP Range;
- * - прогресс, скорость, ETA;
- * - отмена через AbortController.
+ * Менеджер загрузок.
+ *
+ * В Electron: скачивание через IPC (main-процесс), файлы в %APPDATA%/MiamiGraphics/.
+ * В браузере: File System Access API.
+ * Fallback: <a download>.
  */
 
 import type { ExternalModFile } from '../types';
-import { isFsAccessSupported, fileExists, getFileSize, streamToFile, fallbackDownload } from './storage';
+import { isFsAccessSupported, getFileSize, streamToFile, fallbackDownload } from './storage';
 import { notifications } from './notifications';
 
-// ─── Electron API (из preload.cjs) ─────────────────────────────────
+// ─── Electron API ───────────────────────────────────────────────────
 
 interface ElectronAPI {
   electronDownload: (url: string, filename: string) => Promise<{
-    filePath: string;
-    downloadedBytes: number;
-    complete: boolean;
+    filePath: string; downloadedBytes: number; complete: boolean;
   }>;
   electronFileExists: (filename: string) => Promise<{ exists: boolean; size: number }>;
-  onDownloadProgress: (callback: (data: {
+  onDownloadProgress: (cb: (data: {
     filename: string; downloaded: number; total: number; percent: number;
   }) => void) => () => void;
-  getDownloadsDir: () => Promise<string>;
 }
 
 function getElectronApi(): ElectronAPI | null {
   return (window as unknown as { electronAPI?: ElectronAPI }).electronAPI || null;
 }
+
+const isElectron = !!getElectronApi();
 
 // ─── Типы ──────────────────────────────────────────────────────────
 
@@ -50,13 +47,10 @@ export interface DownloadJob {
   files: DownloadFile[];
   status: 'pending' | 'downloading' | 'completed' | 'error' | 'cancelled';
   totalProgress: number;
-  /** Все выбранные файлы скачаны. */
   isDownloaded: boolean;
 }
 
 type Listener = (jobs: DownloadJob[]) => void;
-
-// ─── DownloadManager ───────────────────────────────────────────────
 
 class DownloadManager {
   private jobs = new Map<string, DownloadJob>();
@@ -91,7 +85,7 @@ class DownloadManager {
 
   addJob(modId: number, modName: string, files: ExternalModFile[]): string {
     const jobId = `mod-${modId}`;
-    const downloadFiles: DownloadFile[] = files.map((f) => ({
+    const downloadFiles: DownloadFile[] = files.map(f => ({
       file: f, selected: true, status: 'pending', progress: 0, downloadedBytes: 0,
     }));
     this.jobs.set(jobId, {
@@ -141,21 +135,6 @@ class DownloadManager {
       if (!entry.selected) continue;
       if (entry.status === 'completed' || entry.status === 'skipped' || entry.status === 'cancelled') continue;
 
-      // Проверка «уже скачан» по реальному файлу на диске.
-      const expectedBytes = parseSizeToBytes(entry.file.size);
-      try {
-        const exists = expectedBytes !== null && (await fileExists(entry.file.name, expectedBytes));
-        if (exists) {
-          entry.status = 'skipped';
-          entry.progress = 100;
-          entry.downloadedBytes = expectedBytes;
-          notifications.push('info', `Файл уже скачан: ${entry.file.name}`);
-          this.updateJobProgress(job);
-          this.notifyNow();
-          continue;
-        }
-      } catch { /* check again via download */ }
-
       entry.status = 'downloading';
       entry.errorMessage = undefined;
       this.notifyNow();
@@ -172,7 +151,7 @@ class DownloadManager {
         } else {
           entry.status = 'error';
           entry.errorMessage = err instanceof Error ? err.message : 'Unknown error';
-          notifications.push('error', `Ошибка загрузки ${entry.file.name}: ${entry.errorMessage}`);
+          notifications.push('error', `Ошибка загрузки ${entry.file.name}: ${entry.errorMessage}`, 6000);
         }
       }
 
@@ -196,108 +175,47 @@ class DownloadManager {
     this.notifyNow();
 
     if (job.isDownloaded) {
-      notifications.push('success', `Загрузка завершена: ${job.modName}. Файлы готовы к установке.`, 8000);
-    } else {
-      notifications.push('warning', `Загрузка ${job.modName} завершена с ошибками.`, 8000);
+      notifications.push('success', `Загрузка завершена: ${job.modName}.`, 6000);
     }
   }
 
   // ─── Скачивание одного файла ─────────────────────────────────────
 
-  private async downloadFile(
-    entry: DownloadFile,
-    signal: AbortSignal,
-    jobId: string,
-  ): Promise<void> {
+  private async downloadFile(entry: DownloadFile, signal: AbortSignal, jobId: string) {
     const url = entry.file.url;
     if (!url) throw new Error('URL не указан');
 
-    // 1) FSA — основной путь. В Electron через localhost FSA работает.
+    // В Electron — IPC, в браузере — FSA, последний — fallback
+    if (isElectron) {
+      return await this.downloadViaElectron(entry, url, signal, jobId);
+    }
     if (isFsAccessSupported()) {
       return await this.downloadViaFSA(entry, url, signal);
     }
-
-    // 2) Electron IPC — запасной (если FSA недоступен, но есть preload bridge).
-    const api = getElectronApi();
-    if (api) {
-      return await this.downloadViaElectron(entry, url, signal, jobId, api);
-    }
-
-    // 3) Fallback — стандартный браузерный download.
     fallbackDownload(url, entry.file.name);
     entry.progress = 100;
-    entry.downloadedBytes = 0;
-  }
-
-  // ─── FSA ─────────────────────────────────────────────────────────
-
-  private async downloadViaFSA(entry: DownloadFile, url: string, signal: AbortSignal) {
-    const startByte = await getFileSize(entry.file.name);
-    const headers: Record<string, string> = {};
-    if (startByte > 0) headers['Range'] = `bytes=${startByte}-`;
-
-    const response = await fetch(url, { headers, signal });
-    if (!response.ok && response.status !== 206) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-    if (!response.body) throw new Error('Потоковая загрузка не поддерживается');
-
-    const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
-    const totalSize = startByte + contentLength;
-    entry.downloadedBytes = startByte;
-
-    let lastBytes = startByte;
-    let lastTime = Date.now();
-
-    await streamToFile(
-      entry.file.name,
-      response.body.getReader() as ReadableStreamDefaultReader<Uint8Array>,
-      startByte,
-      (downloaded) => {
-        entry.downloadedBytes = downloaded;
-        entry.progress = totalSize > 0 ? Math.round((downloaded / totalSize) * 100) : 0;
-        const now = Date.now();
-        const elapsed = (now - lastTime) / 1000;
-        if (elapsed >= 0.5) {
-          const bytesDelta = downloaded - lastBytes;
-          if (bytesDelta > 0) {
-            entry.speedBytesPerSec = Math.round(bytesDelta / elapsed);
-            entry.etaSeconds = Math.round((totalSize - downloaded) / entry.speedBytesPerSec);
-          }
-          lastBytes = downloaded;
-          lastTime = now;
-        }
-        this.scheduleNotify();
-      },
-    );
   }
 
   // ─── Electron IPC ────────────────────────────────────────────────
 
-  private async downloadViaElectron(
-    entry: DownloadFile,
-    url: string,
-    signal: AbortSignal,
-    jobId: string,
-    api: ElectronAPI,
-  ) {
+  private async downloadViaElectron(entry: DownloadFile, url: string, signal: AbortSignal, jobId: string) {
+    const api = getElectronApi()!;
     const filename = entry.file.name;
 
-    // Проверяем, может файл уже скачан
+    // Проверка уже скачанного
     try {
       const check = await api.electronFileExists(filename);
-      const expectedBytes = parseSizeToBytes(entry.file.size);
-      if (check.exists && check.size > 0 && (!expectedBytes || Math.abs(check.size - expectedBytes) <= 1)) {
+      const expected = parseSize(entry.file.size);
+      if (check.exists && check.size > 0 && (!expected || Math.abs(check.size - expected) <= 1)) {
         entry.status = 'skipped';
         entry.progress = 100;
         entry.downloadedBytes = check.size;
-        notifications.push('info', `Файл уже скачан: ${filename}`);
         return;
       }
-    } catch { /* скачиваем */ }
+    } catch {}
 
-    // Прогресс от main-процесса
-    const cleanup = api.onDownloadProgress((data) => {
+    // Прогресс
+    const cleanup = api.onDownloadProgress(data => {
       if (data.filename !== filename) return;
       entry.downloadedBytes = data.downloaded;
       entry.progress = data.percent;
@@ -320,6 +238,45 @@ class DownloadManager {
     }
   }
 
+  // ─── FSA ─────────────────────────────────────────────────────────
+
+  private async downloadViaFSA(entry: DownloadFile, url: string, signal: AbortSignal) {
+    const startByte = await getFileSize(entry.file.name);
+    const headers: Record<string, string> = {};
+    if (startByte > 0) headers['Range'] = `bytes=${startByte}-`;
+
+    const response = await fetch(url, { headers, signal });
+    if (!response.ok && response.status !== 206) throw new Error(`HTTP ${response.status}`);
+    if (!response.body) throw new Error('Поток не поддерживается');
+
+    const totalSize = startByte + parseInt(response.headers.get('content-length') || '0', 10);
+    entry.downloadedBytes = startByte;
+    let lastBytes = startByte;
+    let lastTime = Date.now();
+
+    await streamToFile(
+      entry.file.name,
+      response.body.getReader() as ReadableStreamDefaultReader<Uint8Array>,
+      startByte,
+      downloaded => {
+        entry.downloadedBytes = downloaded;
+        entry.progress = totalSize > 0 ? Math.round((downloaded / totalSize) * 100) : 0;
+        const now = Date.now();
+        const elapsed = (now - lastTime) / 1000;
+        if (elapsed >= 0.5) {
+          const delta = downloaded - lastBytes;
+          if (delta > 0) {
+            entry.speedBytesPerSec = Math.round(delta / elapsed);
+            entry.etaSeconds = Math.round((totalSize - downloaded) / entry.speedBytesPerSec);
+          }
+          lastBytes = downloaded;
+          lastTime = now;
+        }
+        this.scheduleNotify();
+      },
+    );
+  }
+
   // ─── Утилиты ─────────────────────────────────────────────────────
 
   private updateJobProgress(job: DownloadJob) {
@@ -339,17 +296,13 @@ class DownloadManager {
 
 export const downloadManager = new DownloadManager();
 
-// ─── Вспомогательная (для внутреннего использования) ────────────────
-
-function parseSizeToBytes(size: string | undefined | null): number | null {
+function parseSize(size: string | undefined | null): number | null {
   if (!size) return null;
-  const match = String(size).trim().match(/^([\d.,]+)\s*([KMGTP]?B?)$/i);
-  if (!match) return null;
-  const value = parseFloat(match[1].replace(',', '.'));
-  if (!Number.isFinite(value)) return null;
-  const unit = match[2].toUpperCase();
-  const m: Record<string, number> = {
-    '': 1, B: 1, KB: 1024, MB: 1024 ** 2, GB: 1024 ** 3, TB: 1024 ** 4,
-  };
-  return m[unit] ? Math.round(value * m[unit]) : null;
+  const m = String(size).trim().match(/^([\d.,]+)\s*([KMGTP]?B?)$/i);
+  if (!m) return null;
+  const v = parseFloat(m[1].replace(',', '.'));
+  if (!Number.isFinite(v)) return null;
+  const u = m[2].toUpperCase();
+  const tbl: Record<string, number> = { '': 1, B: 1, KB: 1024, MB: 1048576, GB: 1073741824 };
+  return tbl[u] ? Math.round(v * tbl[u]) : null;
 }
