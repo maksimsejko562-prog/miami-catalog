@@ -62,6 +62,7 @@ export default function ModDetailScreen({ mod, onBack }: Props) {
   const installingRef = useRef(false);
   const [currentImage, setCurrentImage] = useState(0);
   const [selectedVariant, setSelectedVariant] = useState<string | null>(null);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
 
   // Галерея: сначала главная обложка, потом галерея
   const gallery = [
@@ -127,9 +128,13 @@ export default function ModDetailScreen({ mod, onBack }: Props) {
 
   async function handleInstall() {
     // Если есть варианты (цвета), но ещё не выбраны — не начинаем установку
-    if (mod.variants && mod.variants.length > 0 && !selectedVariant) {
-      notifications.push('info', 'Выберите вариант мода перед установкой.', 4000);
-      return;
+    const hasGroups = mod.variantGroups && mod.variantGroups.length > 0;
+    const hasFlatVariants = mod.variants && mod.variants.length > 0;
+    if (hasGroups || hasFlatVariants) {
+      if (!selectedVariant) {
+        notifications.push('info', 'Выберите вариант мода перед установкой.', 4000);
+        return;
+      }
     }
 
     // Если URL ведёт на веб-страницу — открываем в браузере
@@ -299,8 +304,72 @@ export default function ModDetailScreen({ mod, onBack }: Props) {
             </div>
           )}
 
-          {/* Варианты (цвета) */}
-          {mod.variants && mod.variants.length > 0 && (
+          {/* Варианты: двухуровневые (группы → цвета) */}
+          {mod.variantGroups && mod.variantGroups.length > 0 && (
+            <div className="rounded-2xl bg-white/[0.03] border border-white/[0.06] p-4">
+              <span className="text-xs font-bold text-white/40 uppercase tracking-widest mb-3 block">Режим</span>
+              <div className="flex flex-wrap gap-2 mb-3">
+                {mod.variantGroups.map((g) => {
+                  const isActive = selectedGroupId === g.id;
+                  return (
+                    <button
+                      key={g.id}
+                      onClick={() => {
+                        setSelectedGroupId(g.id);
+                        setSelectedVariant(null); // сброс цвета при смене режима
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border
+                        ${isActive
+                          ? 'bg-accent text-white border-accent shadow-[0_0_12px_rgba(255,8,68,0.4)]'
+                          : 'bg-white/[0.06] text-white/70 border-white/[0.10] hover:bg-white/[0.12] hover:text-white'
+                        }`}
+                    >
+                      {g.color && (
+                        <span className="inline-block w-3 h-3 rounded-full mr-1.5 align-middle"
+                          style={{ backgroundColor: g.color }}
+                        />
+                      )}
+                      {g.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {selectedGroupId && (
+                <>
+                  <span className="text-xs font-bold text-white/40 uppercase tracking-widest mb-3 block">Цвет</span>
+                  <div className="flex flex-wrap gap-2">
+                    {mod.variantGroups
+                      .find((g) => g.id === selectedGroupId)
+                      ?.variants.map((v) => {
+                        const active = selectedVariant === v.folder;
+                        return (
+                          <button
+                            key={v.folder}
+                            onClick={() => setSelectedVariant(v.folder)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border
+                              ${active
+                                ? 'bg-accent text-white border-accent shadow-[0_0_12px_rgba(255,8,68,0.4)]'
+                                : 'bg-white/[0.06] text-white/70 border-white/[0.10] hover:bg-white/[0.12] hover:text-white'
+                              }`}
+                          >
+                            {v.color && (
+                              <span className="inline-block w-3 h-3 rounded-full mr-1.5 align-middle"
+                                style={{ backgroundColor: v.color }}
+                              />
+                            )}
+                            {v.name}
+                          </button>
+                        );
+                      })}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Варианты: плоский список (цвета) */}
+          {mod.variants && mod.variants.length > 0 && !mod.variantGroups && (
             <div className="rounded-2xl bg-white/[0.03] border border-white/[0.06] p-4">
               <span className="text-xs font-bold text-white/40 uppercase tracking-widest mb-3 block">Выберите вариант</span>
               <div className="flex flex-wrap gap-2">

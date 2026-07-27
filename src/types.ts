@@ -149,8 +149,22 @@ export interface CatalogMod {
   screenshots?: string[];
   /** Локальные пути к скачанным картинкам */
   local_images?: string[];
-  /** Варианты внутри архива (цвета, типы и т.п.) */
+  /** Варианты внутри архива (цвета, типы и т.п.) — плоский список */
   variants?: CatalogVariant[];
+  /** Группированные варианты (двухуровневый выбор: группа → вариант) */
+  variantGroups?: CatalogVariantGroup[];
+}
+
+/** Группа вариантов для двухуровневого выбора (например, режим → цвет) */
+export interface CatalogVariantGroup {
+  /** ID группы, e.g. "with-revik" */
+  id: string;
+  /** Название группы, e.g. "С РЕВИКОМ" */
+  label: string;
+  /** HEX-цвет кнопки группы (необязательно) */
+  color?: string;
+  /** Варианты внутри группы (цвета) */
+  variants: CatalogVariant[];
 }
 
 /** Вариант внутри архива мода (например, цвет оружия) */

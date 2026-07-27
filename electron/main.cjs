@@ -577,15 +577,26 @@ ipcMain.handle('electron-install-mod', async (_evt, {
     if (ext) {
       logDebug('  Тип: RAR → экстрактор:', ext.exe);
       let args;
-      const variantArg = variantFolder ? variantFolder + '\\*' : '*';
-      if (ext.type === 'rar') {
-        args = ['x', '-o+', '-y', srcPath, variantArg, TARGET];
-      } else if (ext.type === '7z') {
-        args = variantFolder
-          ? ['x', srcPath, '-y', '-o' + TARGET, variantFolder + '\\*']
-          : ['x', srcPath, '-y', '-o' + TARGET];
+      if (variantFolder) {
+        // Нормализуем разделители: / → \ для Windows
+        const vf = variantFolder.replace(/\//g, '\\');
+        if (ext.type === 'rar') {
+          // unrar e — извлекает БЕЗ сохранения путей (все файлы в TARGET)
+          args = ['e', '-o+', '-y', srcPath, vf + '\\*', TARGET + '\\'];
+        } else if (ext.type === '7z') {
+          // 7z e — тоже без сохранения путей
+          args = ['e', srcPath, '-y', '-o' + TARGET, vf + '\\*'];
+        } else {
+          args = ['e', '-o+', '-y', srcPath, vf + '\\*', TARGET + '\\'];
+        }
       } else {
-        args = ['x', '-o+', '-y', srcPath, variantArg, TARGET];
+        if (ext.type === 'rar') {
+          args = ['x', '-o+', '-y', srcPath, '*', TARGET];
+        } else if (ext.type === '7z') {
+          args = ['x', srcPath, '-y', '-o' + TARGET];
+        } else {
+          args = ['x', '-o+', '-y', srcPath, '*', TARGET];
+        }
       }
       logDebug('  Аргументы:', JSON.stringify(args));
       const before = Date.now();
@@ -611,15 +622,23 @@ ipcMain.handle('electron-install-mod', async (_evt, {
       const archive = fs.existsSync(firstPart) ? firstPart : srcPath;
       logDebug('  Тип: .part.rar, архив:', archive);
       let args;
-      const partVariantArg = variantFolder ? variantFolder + '\\*' : '*';
-      if (ext.type === 'rar') {
-        args = ['x', '-o+', '-y', archive, partVariantArg, TARGET];
-      } else if (ext.type === '7z') {
-        args = variantFolder
-          ? ['x', archive, '-y', '-o' + TARGET, variantFolder + '\\*']
-          : ['x', archive, '-y', '-o' + TARGET];
+      if (variantFolder) {
+        const vf = variantFolder.replace(/\//g, '\\');
+        if (ext.type === 'rar') {
+          args = ['e', '-o+', '-y', archive, vf + '\\*', TARGET + '\\'];
+        } else if (ext.type === '7z') {
+          args = ['e', archive, '-y', '-o' + TARGET, vf + '\\*'];
+        } else {
+          args = ['e', '-o+', '-y', archive, vf + '\\*', TARGET + '\\'];
+        }
       } else {
-        args = ['x', '-o+', '-y', archive, partVariantArg, TARGET];
+        if (ext.type === 'rar') {
+          args = ['x', '-o+', '-y', archive, '*', TARGET];
+        } else if (ext.type === '7z') {
+          args = ['x', archive, '-y', '-o' + TARGET];
+        } else {
+          args = ['x', '-o+', '-y', archive, '*', TARGET];
+        }
       }
       execFileSync(ext.exe, args, opts);
       logDebug('  ✅ Распаковка .part.rar завершена');
@@ -769,7 +788,41 @@ ipcMain.handle('download-and-install-update', async (_evt, url) => {
 
   return new Promise((resolve, reject) => {
     const https = require('https');
-    const file = fs.createWriteStream(destPath);
+    const { spawn } = require('child_process');
+
+    function launchInstaller() {
+      logDebug('  Попытка запустить установщик...');
+      // detached + ignore — не ждём завершения, процесс живёт после выхода приложения
+      const child = spawn(destPath, ['/SILENT', '/CLOSEAPPLICATIONS'], {
+        detached: true,
+        stdio: 'ignore',
+      });
+      child.on('error', (err) => {
+        if (err.code === 'EBUSY') {
+          logDebug('  EBUSY — файл заблокирован, жду 1с и повторяю...');
+          setTimeout(() => launchInstaller(), 1000);
+        } else {
+          reject(err);
+        }
+      });
+      child.unref();
+      // Сигнал рендереру, что всё ок
+      resolve({ launched: true });
+      // Выход через 2с — установщик сам завершит процесс
+      setTimeout(() => app.quit(), 2000);
+    }
+
+    function onFileDownloaded(stream) {
+      const file = fs.createWriteStream(destPath);
+      stream.pipe(file);
+      // close (не finish) — гарантирует, что файловый дескриптор закрыт
+      file.on('close', () => {
+        logDebug('  Обновление скачано, запускаю...');
+        launchInstaller();
+      });
+      file.on('error', reject);
+    }
+
     https.get(url, { headers: { 'User-Agent': 'MiamiLauncher/' + APP_VERSION } }, (res) => {
       // Следуем редиректам
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
@@ -779,27 +832,11 @@ ipcMain.handle('download-and-install-update', async (_evt, url) => {
           next = u.protocol + '//' + u.host + next;
         }
         https.get(next, { headers: { 'User-Agent': 'MiamiLauncher/' + APP_VERSION } }, (r2) => {
-          r2.pipe(file);
-          file.on('finish', () => {
-            file.close();
-            logDebug('  Обновление скачано, запускаю...');
-            require('child_process').execFile(destPath, ['/SILENT', '/CLOSEAPPLICATIONS'], (err) => {
-              if (err) reject(err);
-              else app.quit();
-            });
-          });
-        });
+          onFileDownloaded(r2);
+        }).on('error', reject);
         return;
       }
-      res.pipe(file);
-      file.on('finish', () => {
-        file.close();
-        logDebug('  Обновление скачано, запускаю...');
-        require('child_process').execFile(destPath, ['/SILENT', '/CLOSEAPPLICATIONS'], (err) => {
-          if (err) reject(err);
-          else app.quit();
-        });
-      });
+      onFileDownloaded(res);
     }).on('error', reject);
   });
 });
