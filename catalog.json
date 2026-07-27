@@ -6167,14 +6167,40 @@
       "id": 314,
       "category": "guns",
       "name": "BORIS GUNPACK",
-      "description": "BORIS GUNPACK — мод для GTA 5 RP",
+      "description": "BORIS GUNPACK — мод для GTA 5 RP с выбором цвета и модификации (с/без ревиком). В архиве 5 цветов × 2 варианта = 10 комбинаций.",
       "image_url": "https://raw.githubusercontent.com/maksimsejko562-prog/miami-mods/main/thumbs/boris-gunpack.webp",
       "download_url": "https://github.com/maksimsejko562-prog/miami-mods/releases/download/mods-v1/boris-gunpack.rar",
-      "file_size_label": "47.9 MB",
+      "file_size_label": "173 MB",
       "downloads": 266,
       "author": "",
       "screenshots": [],
-      "local_images": []
+      "local_images": [],
+      "variantGroups": [
+        {
+          "id": "with-revik",
+          "label": "С РЕВИКОМ",
+          "color": "#ff0844",
+          "variants": [
+            { "name": "Чёрный", "folder": "С РЕВИКОМ/black", "color": "#1a1a1a" },
+            { "name": "Голубой", "folder": "С РЕВИКОМ/cyan", "color": "#00e5ff" },
+            { "name": "Розовый", "folder": "С РЕВИКОМ/pink", "color": "#ff80ab" },
+            { "name": "Красный", "folder": "С РЕВИКОМ/red", "color": "#ff1744" },
+            { "name": "Белый", "folder": "С РЕВИКОМ/white", "color": "#ffffff" }
+          ]
+        },
+        {
+          "id": "without-revik",
+          "label": "БЕЗ РЕВИКА",
+          "color": "#6366f1",
+          "variants": [
+            { "name": "Чёрный", "folder": "БЕЗ РЕВИКА/black", "color": "#1a1a1a" },
+            { "name": "Голубой", "folder": "БЕЗ РЕВИКА/cyan", "color": "#00e5ff" },
+            { "name": "Розовый", "folder": "БЕЗ РЕВИКА/pink", "color": "#ff80ab" },
+            { "name": "Красный", "folder": "БЕЗ РЕВИКА/red", "color": "#ff1744" },
+            { "name": "Белый", "folder": "БЕЗ РЕВИКА/white", "color": "#ffffff" }
+          ]
+        }
+      ]
     },
     {
       "id": 315,
