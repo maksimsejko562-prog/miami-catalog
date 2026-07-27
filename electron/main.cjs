@@ -438,10 +438,49 @@ function fileExistsWithAny(dirPath, files) {
 
 const { execFileSync } = require('child_process');
 
-function getUnrarPath() {
-  if (fs.existsSync('C:\\Program Files\\WinRAR\\UnRAR.exe')) return 'C:\\Program Files\\WinRAR\\UnRAR.exe';
-  if (fs.existsSync('C:\\Program Files (x86)\\WinRAR\\UnRAR.exe')) return 'C:\\Program Files (x86)\\WinRAR\\UnRAR.exe';
+function findExtractor() {
+  // 1. WinRAR UnRAR.exe
+  const unrarCandidates = [
+    'C:\\Program Files\\WinRAR\\UnRAR.exe',
+    'C:\\Program Files (x86)\\WinRAR\\UnRAR.exe',
+    'C:\\Program Files\\WinRAR\\WinRAR.exe',
+    'C:\\Program Files (x86)\\WinRAR\\WinRAR.exe',
+  ];
+  // 2. 7-Zip (поддерживает RAR)
+  const sevenCandidates = [
+    'C:\\Program Files\\7-Zip\\7z.exe',
+    'C:\\Program Files (x86)\\7-Zip\\7z.exe',
+  ];
+  // 3. Bandizip
+  const bzCandidates = [
+    'C:\\Program Files\\Bandizip\\Bandizip.exe',
+    'C:\\Program Files (x86)\\Bandizip\\Bandizip.exe',
+  ];
+
+  for (const p of [...unrarCandidates, ...sevenCandidates, ...bzCandidates]) {
+    if (fs.existsSync(p)) return p;
+  }
+
+  // 4. Поиск через PATH (where unrar / where 7z)
+  try {
+    const { execSync } = require('child_process');
+    const result = execSync('where unrar 2>nul || where 7z 2>nul', { stdio: 'pipe', timeout: 5000, shell: 'cmd.exe' });
+    const first = result.toString().trim().split('\r\n')[0].trim();
+    if (first && fs.existsSync(first)) return first;
+  } catch {}
+
   return null;
+}
+
+function isRarSupported() {
+  const exe = findExtractor();
+  if (!exe) return null;
+  // Проверяем, какой это экстрактор
+  const lower = exe.toLowerCase();
+  if (lower.includes('unrar') || lower.includes('winrar')) return { exe, type: 'rar' };
+  if (lower.includes('7z')) return { exe, type: '7z' };
+  if (lower.includes('bandizip')) return { exe, type: 'bandi' };
+  return { exe, type: 'other' };
 }
 
 // ─── IPC: Установка мода через main-процесс (Electron) ────────────
@@ -514,45 +553,55 @@ ipcMain.handle('electron-install-mod', async (_evt, {
     return { success: true, targetDir: TARGET, extracted: true };
   }
 
-  // 2) RAR (не .part) — WinRAR
+  // 2) RAR (не .part)
   if (lower.endsWith('.rar') && !lower.includes('.part')) {
-    const rarExe = getUnrarPath();
-    if (rarExe) {
-      logDebug('  Тип: RAR → UnRAR');
-      logDebug('  UnRAR путь:', rarExe);
-      logDebug('  Запуск: UnRAR x -o+ -y ...');
-      logDebug('  Аргументы:', JSON.stringify(['x', '-o+', '-y', srcPath, '*', TARGET]));
-      const before = Date.now();
-      execFileSync(rarExe, ['x', '-o+', '-y', srcPath, '*', TARGET], opts);
-      const elapsed = Date.now() - before;
-      logDebug('  ✅ UnRAR успешно завершён за', elapsed, 'мс');
-      // Проверка: изменилось ли что-то в TARGET
-      const filesAfter = fs.readdirSync(TARGET).filter(f => f !== '.' && f !== '..');
-      logDebug('  Файлов в TARGET после распаковки:', filesAfter.length);
-      if (filesAfter.length === 0) {
-        logDebug('  ⚠ TARGET пуст после распаковки!');
+    const ext = isRarSupported();
+    if (ext) {
+      logDebug('  Тип: RAR → экстрактор:', ext.exe);
+      let args;
+      if (ext.type === 'rar') {
+        args = ['x', '-o+', '-y', srcPath, '*', TARGET];
+      } else if (ext.type === '7z') {
+        args = ['x', srcPath, '-y', '-o' + TARGET];
       } else {
-        logDebug('  Первые 10 файлов:', filesAfter.slice(0, 10));
+        args = ['x', '-o+', '-y', srcPath, '*', TARGET];
       }
+      logDebug('  Аргументы:', JSON.stringify(args));
+      const before = Date.now();
+      execFileSync(ext.exe, args, opts);
+      const elapsed = Date.now() - before;
+      logDebug('  ✅ Распаковка завершена за', elapsed, 'мс');
+      const filesAfter = fs.readdirSync(TARGET).filter(f => f !== '.' && f !== '..');
+      logDebug('  Файлов в TARGET после:', filesAfter.length);
+      if (filesAfter.length === 0) logDebug('  ⚠ TARGET пуст!');
+      else logDebug('  Первые 10 файлов:', filesAfter.slice(0, 10).join(', '));
       return { success: true, targetDir: TARGET, extracted: true };
     }
-    logDebug('  ⚠ WinRAR не найден, копирую как есть');
+    logDebug('  ⚠ Нет программы для RAR, копирую как есть');
     fs.copyFileSync(srcPath, path.join(TARGET, path.basename(downloadFilename)));
     return { success: true, targetDir: TARGET, extracted: false };
   }
 
-  // 3) .part.rar — WinRAR (первый том)
+  // 3) .part.rar (многочастный)
   if (lower.endsWith('.rar') && lower.includes('.part')) {
-    const rarExe = getUnrarPath();
-    if (rarExe) {
+    const ext = isRarSupported();
+    if (ext) {
       const firstPart = srcPath.replace(/\.part\d+\.rar$/i, '.part1.rar');
       const archive = fs.existsSync(firstPart) ? firstPart : srcPath;
-      logDebug('  Тип: .part.rar → UnRAR, архив:', archive);
-      execFileSync(rarExe, ['x', '-o+', '-y', archive, '*', TARGET], opts);
-      logDebug('  ✅ UnRAR успешно завершён');
+      logDebug('  Тип: .part.rar, архив:', archive);
+      let args;
+      if (ext.type === 'rar') {
+        args = ['x', '-o+', '-y', archive, '*', TARGET];
+      } else if (ext.type === '7z') {
+        args = ['x', archive, '-y', '-o' + TARGET];
+      } else {
+        args = ['x', '-o+', '-y', archive, '*', TARGET];
+      }
+      execFileSync(ext.exe, args, opts);
+      logDebug('  ✅ Распаковка .part.rar завершена');
       return { success: true, targetDir: TARGET, extracted: true };
     }
-    logDebug('  ⚠ WinRAR не найден, копирую .part.rar как есть');
+    logDebug('  ⚠ Нет программы для .part.rar, копирую как есть');
     fs.copyFileSync(srcPath, path.join(TARGET, path.basename(downloadFilename)));
     return { success: true, targetDir: TARGET, extracted: false };
   }
