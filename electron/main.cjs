@@ -138,63 +138,6 @@ function createWindow() {
 
 ipcMain.handle('get-app-version', () => APP_VERSION);
 
-// ─── IPC: Проверка обновлений ──────────────────────────────────────
-
-ipcMain.handle('check-for-updates', () => {
-  return new Promise((resolve) => {
-    const req = http.get(
-      `https://api.github.com/repos/${GITHUB_REPO}/releases?per_page=5`,
-      { headers: { 'User-Agent': 'MiamiLauncher/1.0', Accept: 'application/vnd.github.v3+json' } },
-      (res) => {
-        let data = '';
-        res.on('data', (chunk) => (data += chunk));
-        res.on('end', () => {
-          try {
-            const releases = JSON.parse(data);
-            if (!Array.isArray(releases) || releases.length === 0) {
-              resolve({ status: 'not-available' });
-              return;
-            }
-            const launcherRelease = releases.find(
-              (r) => r.tag_name && /^v?\d+\.\d+\.\d+/.test(r.tag_name)
-            );
-            if (!launcherRelease) {
-              resolve({ status: 'not-available' });
-              return;
-            }
-            const latest = launcherRelease.tag_name.replace(/^v/, '');
-            const current = APP_VERSION;
-            const latestParts = latest.split('.').map(Number);
-            const currentParts = current.split('.').map(Number);
-            const isNewer =
-              latestParts[0] > currentParts[0] ||
-              (latestParts[0] === currentParts[0] && latestParts[1] > currentParts[1]) ||
-              (latestParts[0] === currentParts[0] && latestParts[1] === currentParts[1] && latestParts[2] > currentParts[2]);
-
-            if (isNewer) {
-              const asset = (launcherRelease.assets || []).find(
-                (a) => a.name && a.name.endsWith('.exe') && a.name.includes('Setup')
-              );
-              resolve({
-                status: 'available',
-                version: latest,
-                url: asset ? asset.browser_download_url : launcherRelease.html_url,
-                releaseDate: launcherRelease.published_at,
-              });
-            } else {
-              resolve({ status: 'not-available' });
-            }
-          } catch {
-            resolve({ status: 'not-available' });
-          }
-        });
-      }
-    );
-    req.on('error', () => resolve({ status: 'error', message: 'Нет подключения к GitHub' }));
-    req.setTimeout(10000, () => { req.destroy(); resolve({ status: 'error', message: 'Таймаут соединения' }); });
-  });
-});
-
 // ─── IPC: Папка загрузок ───────────────────────────────────────────
 
 function getDownloadsDir() {
@@ -693,7 +636,7 @@ app.whenReady().then(async () => {
       const https = require('https');
       const url = 'https://api.github.com/repos/maksimsejko562-prog/miami-mods/releases/latest';
       const data = await new Promise((resolve, reject) => {
-        https.get(url, { headers: { 'User-Agent': 'MiamiLauncher/' + CURRENT_VERSION } }, (res) => {
+        https.get(url, { headers: { 'User-Agent': 'MiamiLauncher/' + APP_VERSION } }, (res) => {
           let body = '';
           res.on('data', c => body += c);
           res.on('end', () => resolve(body));
@@ -702,8 +645,8 @@ app.whenReady().then(async () => {
       const release = JSON.parse(data);
       const tag = release.tag_name || '';
       const latestVer = tag.startsWith('v') ? tag.slice(1) : tag;
-      logDebug('  Текущая:', CURRENT_VERSION, 'Последняя:', latestVer);
-      if (latestVer && latestVer !== CURRENT_VERSION) {
+      logDebug('  Текущая:', APP_VERSION, 'Последняя:', latestVer);
+      if (latestVer && latestVer !== APP_VERSION) {
         const asset = (release.assets || []).find(a => a.name && a.name.endsWith('.exe') && a.name.includes('Setup'));
         if (asset) {
           const win = BrowserWindow.getAllWindows()[0];
@@ -736,17 +679,14 @@ app.on('activate', () => {
 });
 
 // ─── Автообновление ─────────────────────────────────────────────────
-// Проверка новой версии на GitHub
-
-const CURRENT_VERSION = app.getVersion(); // из package.json
 
 ipcMain.handle('check-for-updates', async () => {
-  logDebug('Проверка обновления, текущая версия:', CURRENT_VERSION);
+  logDebug('Проверка обновления, текущая версия:', APP_VERSION);
   try {
     const https = require('https');
     const url = 'https://api.github.com/repos/maksimsejko562-prog/miami-mods/releases/latest';
     const data = await new Promise((resolve, reject) => {
-      https.get(url, { headers: { 'User-Agent': 'MiamiLauncher/' + CURRENT_VERSION } }, (res) => {
+      https.get(url, { headers: { 'User-Agent': 'MiamiLauncher/' + APP_VERSION } }, (res) => {
         let body = '';
         res.on('data', c => body += c);
         res.on('end', () => resolve(body));
@@ -757,7 +697,7 @@ ipcMain.handle('check-for-updates', async () => {
     const latestVer = tag.startsWith('v') ? tag.slice(1) : tag;
     logDebug('  Последняя версия на GitHub:', latestVer);
 
-    if (latestVer && latestVer !== CURRENT_VERSION) {
+    if (latestVer && latestVer !== APP_VERSION) {
       // Ищем asset-установщик
       const asset = (release.assets || []).find(a =>
         a.name && a.name.endsWith('.exe') && a.name.includes('Setup')
@@ -787,7 +727,7 @@ ipcMain.handle('download-and-install-update', async (_evt, url) => {
   return new Promise((resolve, reject) => {
     const https = require('https');
     const file = fs.createWriteStream(destPath);
-    https.get(url, { headers: { 'User-Agent': 'MiamiLauncher/' + CURRENT_VERSION } }, (res) => {
+    https.get(url, { headers: { 'User-Agent': 'MiamiLauncher/' + APP_VERSION } }, (res) => {
       // Следуем редиректам
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         let next = res.headers.location;
@@ -795,7 +735,7 @@ ipcMain.handle('download-and-install-update', async (_evt, url) => {
           const u = new URL(url);
           next = u.protocol + '//' + u.host + next;
         }
-        https.get(next, { headers: { 'User-Agent': 'MiamiLauncher/' + CURRENT_VERSION } }, (r2) => {
+        https.get(next, { headers: { 'User-Agent': 'MiamiLauncher/' + APP_VERSION } }, (r2) => {
           r2.pipe(file);
           file.on('finish', () => {
             file.close();
