@@ -202,11 +202,13 @@ class DownloadManager {
     const api = getElectronApi()!;
     const filename = entry.file.name;
 
-    // Проверка уже скачанного
+    // Проверка уже скачанного (пропускаем, только если знаем точный размер И он совпадает)
     try {
       const check = await api.electronFileExists(filename);
       const expected = parseSize(entry.file.size);
-      if (check.exists && check.size > 0 && (!expected || Math.abs(check.size - expected) <= 1)) {
+      // Если размер известен и совпадает — скипаем
+      // Если размер НЕИЗВЕСТЕН (null) — НЕ скипаем, перезагружаем (чтобы не было 1-байтных мусорных файлов)
+      if (expected !== null && check.exists && check.size > 0 && Math.abs(check.size - expected) <= 1) {
         entry.status = 'skipped';
         entry.progress = 100;
         entry.downloadedBytes = check.size;

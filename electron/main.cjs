@@ -229,9 +229,12 @@ ipcMain.handle('electron-download', async (evt, url, filename) => {
   // Проверяем, может файл уже полностью скачан
   try {
     const stat = fs.statSync(destPath);
-    if (stat.size > 0) {
+    // Если файл меньше 1 КБ — это мусор (частичная загрузка / ошибка), удаляем и качаем заново
+    if (stat.size > 1024) {
       return { filePath: destPath, downloadedBytes: stat.size, complete: true };
     }
+    // Маленький файл — удаляем
+    try { fs.unlinkSync(destPath); } catch {}
   } catch {
     // Файла нет — начнём с нуля
   }
@@ -240,7 +243,7 @@ ipcMain.handle('electron-download', async (evt, url, filename) => {
   let startByte = 0;
   try {
     const stat = fs.statSync(destPath);
-    startByte = stat.size;
+    if (stat.size > 1024) startByte = stat.size;
   } catch {}
 
   return new Promise((resolve, reject) => {
@@ -444,15 +447,29 @@ function getUnrarPath() {
 // ─── IPC: Установка мода через main-процесс (Electron) ────────────
 // Скачивает файл в %APPDATA%/MiamiGraphics/, затем распаковывает в корень GTA5.
 
+function logDebug(...args) {
+  const ts = new Date().toISOString().slice(11, 19);
+  console.log(`[${ts}][INSTALL]`, ...args);
+}
+
 ipcMain.handle('electron-install-mod', async (_evt, {
   downloadFilename, gtaPath, category, modId,
 }) => {
   const srcDir = getDownloadsDir();
   const srcPath = path.join(srcDir, downloadFilename);
 
+  logDebug('Запрос установки:', 'category=', category, 'modId=', modId);
+  logDebug('  downloadFilename =', downloadFilename);
+  logDebug('  srcPath =', srcPath);
+  logDebug('  gtaPath =', gtaPath);
+
+  // Проверка файла
   if (!fs.existsSync(srcPath)) {
+    logDebug('  ❌ Файл НЕ НАЙДЕН:', srcPath);
     throw new Error(`Файл не найден: ${srcPath}`);
   }
+  const fileStat = fs.statSync(srcPath);
+  logDebug('  ✅ Файл найден, размер:', fileStat.size, 'байт');
 
   // ═══════════════════════════════════════════════
   // ВЫБОР ПУТИ ПО КАТЕГОРИИ
@@ -469,19 +486,30 @@ ipcMain.handle('electron-install-mod', async (_evt, {
   if (!fs.existsSync(TARGET)) {
     fs.mkdirSync(TARGET, { recursive: true });
   }
+  logDebug('  TARGET =', TARGET);
 
   const lower = downloadFilename.toLowerCase();
   const opts = { stdio: 'pipe', timeout: 300000 };
 
   // 1) ZIP — PowerShell Expand-Archive
   if (lower.endsWith('.zip')) {
+    logDebug('  Тип: ZIP → PowerShell Expand-Archive');
+    logDebug('  Запуск: powershell Expand-Archive...');
     try {
       execFileSync('powershell', [
         '-NoProfile', '-Command',
         `Expand-Archive -Path '${srcPath.replace(/'/g, "''")}' -DestinationPath '${TARGET.replace(/'/g, "''")}' -Force`
       ], opts);
+      logDebug('  ✅ PowerShell успешно завершён');
     } catch (e) {
-      if (!fs.existsSync(TARGET)) throw e;
+      logDebug('  ❌ PowerShell ошибка:', e.message || e);
+      const exitCode = e.status;
+      const stderr = e.stderr?.toString() || '';
+      logDebug('  code:', exitCode, 'stderr:', stderr);
+      // Если TARGET создалась — всё равно могли быть файлы
+      if (!fs.existsSync(TARGET)) {
+        throw new Error(`Ошибка распаковки ZIP: ${e.message || e}`);
+      }
     }
     return { success: true, targetDir: TARGET, extracted: true };
   }
@@ -490,9 +518,14 @@ ipcMain.handle('electron-install-mod', async (_evt, {
   if (lower.endsWith('.rar') && !lower.includes('.part')) {
     const rarExe = getUnrarPath();
     if (rarExe) {
+      logDebug('  Тип: RAR → UnRAR');
+      logDebug('  UnRAR путь:', rarExe);
+      logDebug('  Запуск: UnRAR x -o+ -y ...');
       execFileSync(rarExe, ['x', '-o+', '-y', srcPath, '*', TARGET], opts);
+      logDebug('  ✅ UnRAR успешно завершён');
       return { success: true, targetDir: TARGET, extracted: true };
     }
+    logDebug('  ⚠ WinRAR не найден, копирую как есть');
     fs.copyFileSync(srcPath, path.join(TARGET, path.basename(downloadFilename)));
     return { success: true, targetDir: TARGET, extracted: false };
   }
@@ -503,14 +536,19 @@ ipcMain.handle('electron-install-mod', async (_evt, {
     if (rarExe) {
       const firstPart = srcPath.replace(/\.part\d+\.rar$/i, '.part1.rar');
       const archive = fs.existsSync(firstPart) ? firstPart : srcPath;
+      logDebug('  Тип: .part.rar → UnRAR, архив:', archive);
       execFileSync(rarExe, ['x', '-o+', '-y', archive, '*', TARGET], opts);
+      logDebug('  ✅ UnRAR успешно завершён');
       return { success: true, targetDir: TARGET, extracted: true };
     }
+    logDebug('  ⚠ WinRAR не найден, копирую .part.rar как есть');
     fs.copyFileSync(srcPath, path.join(TARGET, path.basename(downloadFilename)));
     return { success: true, targetDir: TARGET, extracted: false };
   }
 
   // 4) Прочее (.rpf, .oiv, .7z, .dll) — копируем в TARGET
+  logDebug('  Тип: прочее (не ZIP/RAR) — копирую в TARGET');
+  logDebug('  Расширение файла:', path.extname(downloadFilename));
   fs.copyFileSync(srcPath, path.join(TARGET, path.basename(downloadFilename)));
   return { success: true, targetDir: TARGET, extracted: false };
 });
