@@ -9,7 +9,7 @@ const http = require('http');
 
 const isDev = !app.isPackaged;
 const APP_VERSION = require('../package.json').version;
-const GITHUB_REPO = 'maksimsejko562-prog/miami-mods';
+const GITHUB_REPO = 'maksimsejko562-prog/miami-catalog';
 
 // ─── Статический сервер для dist/ ───────────────────────────────────
 // Простой HTTP-сервер раздаёт файлы из dist/. Это делает приложение
@@ -672,7 +672,7 @@ app.whenReady().then(async () => {
     try {
       logDebug('Автопроверка обновлений...');
       const https = require('https');
-      const url = 'https://api.github.com/repos/maksimsejko562-prog/miami-mods/releases/latest';
+      const url = 'https://api.github.com/repos/maksimsejko562-prog/miami-catalog/releases/latest';
       const data = await new Promise((resolve, reject) => {
         https.get(url, { headers: { 'User-Agent': 'MiamiLauncher/' + APP_VERSION } }, (res) => {
           let body = '';
@@ -722,7 +722,7 @@ ipcMain.handle('check-for-updates', async () => {
   logDebug('Проверка обновления, текущая версия:', APP_VERSION);
   try {
     const https = require('https');
-    const url = 'https://api.github.com/repos/maksimsejko562-prog/miami-mods/releases/latest';
+    const url = 'https://api.github.com/repos/maksimsejko562-prog/miami-catalog/releases/latest';
     const data = await new Promise((resolve, reject) => {
       https.get(url, { headers: { 'User-Agent': 'MiamiLauncher/' + APP_VERSION } }, (res) => {
         let body = '';

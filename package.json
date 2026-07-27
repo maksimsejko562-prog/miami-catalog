@@ -51,7 +51,7 @@
       "electron/**/*"
     ],
     "directories": {
-      "output": "build-fix4"
+      "output": "build-fix5"
     },
     "win": {
       "target": [
