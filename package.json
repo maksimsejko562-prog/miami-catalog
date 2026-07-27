@@ -1,7 +1,7 @@
 {
   "name": "miami-launcher-ui",
   "private": true,
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Miami Launcher — каталог модов с потоковой установкой",
   "author": "MiamiLauncher",
   "type": "module",
@@ -51,7 +51,7 @@
       "electron/**/*"
     ],
     "directories": {
-      "output": "build-fix3"
+      "output": "build-fix4"
     },
     "win": {
       "target": [
