@@ -51,7 +51,7 @@
       "electron/**/*"
     ],
     "directories": {
-      "output": "build-dbg1"
+      "output": "build-final"
     },
     "win": {
       "target": [

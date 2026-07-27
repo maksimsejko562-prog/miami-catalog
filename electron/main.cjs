@@ -521,8 +521,19 @@ ipcMain.handle('electron-install-mod', async (_evt, {
       logDebug('  Тип: RAR → UnRAR');
       logDebug('  UnRAR путь:', rarExe);
       logDebug('  Запуск: UnRAR x -o+ -y ...');
+      logDebug('  Аргументы:', JSON.stringify(['x', '-o+', '-y', srcPath, '*', TARGET]));
+      const before = Date.now();
       execFileSync(rarExe, ['x', '-o+', '-y', srcPath, '*', TARGET], opts);
-      logDebug('  ✅ UnRAR успешно завершён');
+      const elapsed = Date.now() - before;
+      logDebug('  ✅ UnRAR успешно завершён за', elapsed, 'мс');
+      // Проверка: изменилось ли что-то в TARGET
+      const filesAfter = fs.readdirSync(TARGET).filter(f => f !== '.' && f !== '..');
+      logDebug('  Файлов в TARGET после распаковки:', filesAfter.length);
+      if (filesAfter.length === 0) {
+        logDebug('  ⚠ TARGET пуст после распаковки!');
+      } else {
+        logDebug('  Первые 10 файлов:', filesAfter.slice(0, 10));
+      }
       return { success: true, targetDir: TARGET, extracted: true };
     }
     logDebug('  ⚠ WinRAR не найден, копирую как есть');
