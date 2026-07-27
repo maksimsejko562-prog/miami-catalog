@@ -312,17 +312,29 @@ const COMMON_GTA_PATHS = [
   // Steam (по умолчанию)
   'C:\\Program Files (x86)\\Steam\\steamapps\\common\\Grand Theft Auto V',
   'C:\\Program Files\\Steam\\steamapps\\common\\Grand Theft Auto V',
-  // Steam на других дисках (основные буквы)
+  // Steam на C:/Program Files/
+  'C:\\Program Files (x86)\\Steam\\steamapps\\common\\Grand Theft Auto V',
+  // Steam на других дисках
   'D:\\SteamLibrary\\steamapps\\common\\Grand Theft Auto V',
+  'D:\\Steam\\steamapps\\common\\Grand Theft Auto V',
+  'D:\\games\\steamapps\\common\\Grand Theft Auto V',
   'E:\\SteamLibrary\\steamapps\\common\\Grand Theft Auto V',
+  'E:\\games\\steamapps\\common\\Grand Theft Auto V',
   // Epic Games
   'C:\\Program Files\\Epic Games\\GTAV',
+  'D:\\Epic Games\\GTAV',
   // Rockstar Games Launcher
   'C:\\Program Files\\Rockstar Games\\Grand Theft Auto V',
   'C:\\ProgramData\\Rockstar Games\\Grand Theft Auto V',
   // Пользовательские
   'D:\\Games\\Grand Theft Auto V',
+  'D:\\Games\\GTA V',
+  'D:\\GTA5',
+  'D:\\GTA V',
   'E:\\Games\\Grand Theft Auto V',
+  // Общие
+  'D:\\Grand Theft Auto V',
+  'C:\\Grand Theft Auto V',
 ];
 
 function getSteamPathFromRegistry() {
@@ -342,29 +354,66 @@ function getSteamPathFromRegistry() {
 }
 
 ipcMain.handle('detect-gta-path', () => {
-  const MARKER_FILES = ['GTA5.exe', 'PlayGTAV.exe', 'Grand Theft Auto V.exe'];
+  // Маркерные файлы GTA 5 — расширенный список
+  const MARKER_FILES = [
+    'GTA5.exe', 'PlayGTAV.exe', 'Grand Theft Auto V.exe',
+    'GTAVLauncher.exe', 'GTA5_Enhanced.exe',
+  ];
 
-  // 1. Steam через реестр
+  // 1. Steam через реестр (HKCU\Software\Valve\Steam\SteamPath)
   const steamPath = getSteamPathFromRegistry();
-  if (steamPath && fs.existsSync(steamPath) && MARKER_FILES.some(f => fs.existsSync(path.join(steamPath, f)))) {
+  if (steamPath && fileExistsWithAny(steamPath, MARKER_FILES)) {
     return { path: steamPath, source: 'steam' };
   }
 
-  // 2. Общие пути
+  // 2. Все известные пути (расширенный список)
   for (const p of COMMON_GTA_PATHS) {
-    if (fs.existsSync(p) && MARKER_FILES.some(f => fs.existsSync(path.join(p, f)))) {
+    if (fileExistsWithAny(p, MARKER_FILES)) {
       return { path: p, source: 'common' };
     }
   }
 
-  // 3. Расширенный поиск по дискам C: и D:
+  // 3. Поиск Steam библиотек через libraryfolders.vdf
   try {
-    for (const drive of ['C:', 'D:']) {
+    const steamRoot = getSteamPathFromRegistry();
+    if (steamRoot) {
+      const steamBase = path.dirname(path.dirname(path.dirname(steamRoot))); // .../steamapps/common/GTAV → .../steamapps → ... (Steam root)
+      // На самом деле steamRoot уже steamapps/common/GTAV, нам нужен путь на 3 уровня выше
+      const steamDir = path.dirname(path.dirname(path.dirname(steamRoot))); // до корня Steam
+
+      const vdfPath = path.join(steamDir, 'steamapps', 'libraryfolders.vdf');
+      if (fs.existsSync(vdfPath)) {
+        const vdf = fs.readFileSync(vdfPath, 'utf-8');
+        const libMatches = vdf.match(/"path"\s+"([^"]+)"/g);
+        if (libMatches) {
+          for (const libMatch of libMatches) {
+            const libPath = libMatch.match(/"path"\s+"([^"]+)"/)[1];
+            const candidate = path.join(libPath.replace(/\\\\/g, '\\'), 'steamapps', 'common', 'Grand Theft Auto V');
+            if (fs.existsSync(candidate) && fileExistsWithAny(candidate, MARKER_FILES)) {
+              return { path: candidate, source: 'steam-library' };
+            }
+          }
+        }
+      }
+    }
+  } catch {}
+
+  // 4. Поиск на всех дисках (не только C: и D:)
+  try {
+    for (const drive of ['C:', 'D:', 'E:', 'F:', 'G:', 'H:']) {
+      if (!fs.existsSync(drive + '\\')) continue;
       const dirs = fs.readdirSync(drive + '\\');
       for (const dir of dirs) {
         const candidate = path.join(drive + '\\', dir, 'Grand Theft Auto V');
-        if (fs.existsSync(candidate) && MARKER_FILES.some(f => fs.existsSync(path.join(candidate, f)))) {
+        if (fs.existsSync(candidate) && fileExistsWithAny(candidate, MARKER_FILES)) {
           return { path: candidate, source: 'scan' };
+        }
+        // Также пробуем GTA V без "Grand Theft Auto V"
+        if (dir.toUpperCase().includes('GTA') || dir.toUpperCase().includes('GRAND')) {
+          const candidate2 = path.join(drive + '\\', dir);
+          if (fs.existsSync(candidate2) && fileExistsWithAny(candidate2, MARKER_FILES)) {
+            return { path: candidate2, source: 'scan-name' };
+          }
         }
       }
     }
@@ -373,10 +422,27 @@ ipcMain.handle('detect-gta-path', () => {
   return { path: null, source: null };
 });
 
-// ─── IPC: Установка мода через main-процесс (Electron) ────────────
-// Копирует/распаковывает скачанный файл из папки загрузок в GTA5/mods/
+function fileExistsWithAny(dirPath, files) {
+  for (const f of files) {
+    try {
+      if (fs.existsSync(path.join(dirPath, f))) return true;
+    } catch {}
+  }
+  return false;
+}
 
-const { execSync } = require('child_process');
+// ─── Вспомогательные функции для установки ─────────────────────────
+
+const { execFileSync } = require('child_process');
+
+function getUnrarPath() {
+  if (fs.existsSync('C:\\Program Files\\WinRAR\\UnRAR.exe')) return 'C:\\Program Files\\WinRAR\\UnRAR.exe';
+  if (fs.existsSync('C:\\Program Files (x86)\\WinRAR\\UnRAR.exe')) return 'C:\\Program Files (x86)\\WinRAR\\UnRAR.exe';
+  return null;
+}
+
+// ─── IPC: Установка мода через main-процесс (Electron) ────────────
+// Скачивает файл в %APPDATA%/MiamiGraphics/, затем распаковывает в корень GTA5.
 
 ipcMain.handle('electron-install-mod', async (_evt, {
   downloadFilename, gtaPath, category, modId,
@@ -388,49 +454,56 @@ ipcMain.handle('electron-install-mod', async (_evt, {
     throw new Error(`Файл не найден: ${srcPath}`);
   }
 
-  // Цель: GTA5/mods/<category>/<modId>/
-  const modsDir = path.join(gtaPath, 'mods');
-  if (!fs.existsSync(modsDir)) fs.mkdirSync(modsDir, { recursive: true });
-  const targetDir = path.join(modsDir, category, String(modId));
-  if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+  // ═══════════════════════════════════════════════
+  // УСТАНОВКА В КОРЕНЬ GTA 5
+  // Архив распаковывается прямо в папку игры.
+  // ═══════════════════════════════════════════════
 
   const lower = downloadFilename.toLowerCase();
-  const isZip = lower.endsWith('.zip');
-  const isRar = lower.endsWith('.rar');
-  const isSplit = lower.includes('.part');
+  const opts = { stdio: 'pipe', timeout: 300000 };
 
-  if (isZip) {
-    // Распаковка ZIP через PowerShell (Expand-Archive)
-    const dest = targetDir;
-    execSync(
-      `powershell -NoProfile -Command "Expand-Archive -Path '${srcPath}' -DestinationPath '${dest}' -Force"`,
-      { stdio: 'pipe', timeout: 300000 }
-    );
-    return { success: true, targetDir, extracted: true };
-  }
-
-  if (isRar && !isSplit) {
-    // Распаковка RAR через WinRAR если доступен
-    const rarPath = 'C:\\Program Files\\WinRAR\\UnRAR.exe';
-    const altRarPath = 'C:\\Program Files (x86)\\WinRAR\\UnRAR.exe';
-    if (fs.existsSync(rarPath) || fs.existsSync(altRarPath)) {
-      const exe = fs.existsSync(rarPath) ? rarPath : altRarPath;
-      execSync(
-        `"${exe}" x -o+ "${srcPath}" "${targetDir}\\*.rar"`,
-        { stdio: 'pipe', timeout: 300000 }
-      );
-      return { success: true, targetDir, extracted: true };
+  // 1) ZIP — PowerShell Expand-Archive
+  if (lower.endsWith('.zip')) {
+    try {
+      execFileSync('powershell', [
+        '-NoProfile', '-Command',
+        `Expand-Archive -Path '${srcPath.replace(/'/g, "''")}' -DestinationPath '${gtaPath.replace(/'/g, "''")}' -Force`
+      ], opts);
+    } catch (e) {
+      // PowerShell有时会返回非零退出码但文件已解压，检查一下
+      if (!fs.existsSync(gtaPath)) throw e;
     }
-    // Если WinRAR нет — копируем как есть
-    const destPath = path.join(targetDir, path.basename(downloadFilename));
-    fs.copyFileSync(srcPath, destPath);
-    return { success: true, targetDir, extracted: false };
+    return { success: true, targetDir: gtaPath, extracted: true };
   }
 
-  // Копирование (для .rpf, .oiv, .partX.rar и прочих)
-  const destPath = path.join(targetDir, path.basename(downloadFilename));
-  fs.copyFileSync(srcPath, destPath);
-  return { success: true, targetDir, extracted: false };
+  // 2) RAR (не .part) — WinRAR
+  if (lower.endsWith('.rar') && !lower.includes('.part')) {
+    const rarExe = getUnrarPath();
+    if (rarExe) {
+      // ВАЖНО: НЕ добавлять trailing backslash — "path\" ломает парсинг Windows
+      execFileSync(rarExe, ['x', '-o+', '-y', srcPath, '*', gtaPath], opts);
+      return { success: true, targetDir: gtaPath, extracted: true };
+    }
+    fs.copyFileSync(srcPath, path.join(gtaPath, path.basename(downloadFilename)));
+    return { success: true, targetDir: gtaPath, extracted: false };
+  }
+
+  // 3) .part.rar — WinRAR (первый том)
+  if (lower.endsWith('.rar') && lower.includes('.part')) {
+    const rarExe = getUnrarPath();
+    if (rarExe) {
+      const firstPart = srcPath.replace(/\.part\d+\.rar$/i, '.part1.rar');
+      const archive = fs.existsSync(firstPart) ? firstPart : srcPath;
+      execFileSync(rarExe, ['x', '-o+', '-y', archive, '*', gtaPath], opts);
+      return { success: true, targetDir: gtaPath, extracted: true };
+    }
+    fs.copyFileSync(srcPath, path.join(gtaPath, path.basename(downloadFilename)));
+    return { success: true, targetDir: gtaPath, extracted: false };
+  }
+
+  // 4) Прочее (.rpf, .oiv, .7z, .dll) — копируем в корень
+  fs.copyFileSync(srcPath, path.join(gtaPath, path.basename(downloadFilename)));
+  return { success: true, targetDir: gtaPath, extracted: false };
 });
 
 ipcMain.handle('electron-check-gta-path', () => {

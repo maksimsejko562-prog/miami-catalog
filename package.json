@@ -51,7 +51,7 @@
       "electron/**/*"
     ],
     "directories": {
-      "output": "release"
+      "output": "build-v3"
     },
     "win": {
       "target": [
