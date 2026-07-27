@@ -82,7 +82,7 @@ function dbCategoryToCatalogCategory(c: DbCategory): CatalogCategory {
 }
 
 async function loadFromSupabase(): Promise<CatalogData | null> {
-  if (SUPABASE_URL.includes('ТВОЙ_PROJECT_ID')) return null;
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
 
   const [dbCategories, dbMods] = await Promise.all([
     supabaseGet<DbCategory[]>('categories?select=*&order=sort_order.asc'),

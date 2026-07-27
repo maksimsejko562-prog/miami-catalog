@@ -111,7 +111,6 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
-      webSecurity: false,
     },
   });
 
@@ -126,6 +125,15 @@ function createWindow() {
   win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: 'deny' };
+  });
+
+  // Разрешаем File System Access API (showDirectoryPicker) для localhost
+  win.webContents.session.setPermissionRequestHandler((_wc, permission, callback) => {
+    if (permission === 'FileSystem' || permission === 'clipboard-read' || permission === 'clipboard-sanitized-write') {
+      callback(true);
+    } else {
+      callback(false);
+    }
   });
 
   ipcMain.on('win-minimize', () => win.minimize());
@@ -284,18 +292,38 @@ const COMMON_GTA_PATHS = [
 ];
 
 function getSteamPathFromRegistry() {
-  try {
-    const { execSync } = require('child_process');
-    const out = execSync(
-      'reg query "HKCU\\Software\\Valve\\Steam" /v SteamPath 2>nul',
-      { encoding: 'utf-8', timeout: 5000 }
-    );
-    const match = out.match(/SteamPath\s+REG_SZ\s+(.+)/i);
-    if (match) {
-      const steamPath = match[1].trim().replace(/\\\\/g, '\\');
-      return path.join(steamPath, 'steamapps', 'common', 'Grand Theft Auto V');
-    }
-  } catch {}
+  const keys = [
+    'HKLM\\SOFTWARE\\Wow6432Node\\Valve\\Steam',
+    'HKLM\\SOFTWARE\\Valve\\Steam',
+    'HKCU\\Software\\Valve\\Steam',
+  ];
+  for (const key of keys) {
+    try {
+      const { execSync } = require('child_process');
+      const out = execSync(
+        `reg query "${key}" /v InstallPath 2>nul`,
+        { encoding: 'utf-8', timeout: 5000 }
+      );
+      const match = out.match(/InstallPath\s+REG_SZ\s+(.+)/i);
+      if (match) {
+        const steamPath = match[1].trim().replace(/\\\\/g, '\\');
+        return path.join(steamPath, 'steamapps', 'common', 'Grand Theft Auto V');
+      }
+    } catch {}
+    // SteamPath тоже может быть
+    try {
+      const { execSync } = require('child_process');
+      const out = execSync(
+        `reg query "${key}" /v SteamPath 2>nul`,
+        { encoding: 'utf-8', timeout: 5000 }
+      );
+      const match = out.match(/SteamPath\s+REG_SZ\s+(.+)/i);
+      if (match) {
+        const steamPath = match[1].trim().replace(/\\\\/g, '\\');
+        return path.join(steamPath, 'steamapps', 'common', 'Grand Theft Auto V');
+      }
+    } catch {}
+  }
   return null;
 }
 
@@ -344,22 +372,68 @@ ipcMain.handle('detect-gta-path', () => {
     }
   } catch {}
 
-  // 4. Поиск на всех дисках (не только C: и D:)
+  // 4. Поиск на всех дисках (глубокий — до 3 уровней)
   try {
     for (const drive of ['C:', 'D:', 'E:', 'F:', 'G:', 'H:']) {
       if (!fs.existsSync(drive + '\\')) continue;
-      const dirs = fs.readdirSync(drive + '\\');
-      for (const dir of dirs) {
-        const candidate = path.join(drive + '\\', dir, 'Grand Theft Auto V');
-        if (fs.existsSync(candidate) && fileExistsWithAny(candidate, MARKER_FILES)) {
-          return { path: candidate, source: 'scan' };
+      const rootDirs = fs.readdirSync(drive + '\\', { withFileTypes: true });
+      for (const dir of rootDirs) {
+        if (!dir.isDirectory()) continue;
+        const dirPath = path.join(drive + '\\', dir.name);
+
+        // Прямая проверка: <drive>:\<dir>\Grand Theft Auto V
+        const direct = path.join(dirPath, 'Grand Theft Auto V');
+        if (fs.existsSync(direct) && fileExistsWithAny(direct, MARKER_FILES)) {
+          return { path: direct, source: 'scan' };
         }
-        // Также пробуем GTA V без "Grand Theft Auto V"
-        if (dir.toUpperCase().includes('GTA') || dir.toUpperCase().includes('GRAND')) {
-          const candidate2 = path.join(drive + '\\', dir);
-          if (fs.existsSync(candidate2) && fileExistsWithAny(candidate2, MARKER_FILES)) {
-            return { path: candidate2, source: 'scan-name' };
+
+        // <drive>:\<dir>\steamapps\common\Grand Theft Auto V
+        const steamLib = path.join(dirPath, 'steamapps', 'common', 'Grand Theft Auto V');
+        if (fs.existsSync(steamLib) && fileExistsWithAny(steamLib, MARKER_FILES)) {
+          return { path: steamLib, source: 'scan-steam' };
+        }
+
+        // <drive>:\<dir>\GTA V или <drive>:\<dir>\GTA5
+        if (dir.name.toUpperCase().includes('GTA')) {
+          if (fileExistsWithAny(dirPath, MARKER_FILES)) {
+            return { path: dirPath, source: 'scan-name' };
           }
+          // Проверка подпапок (GTA V -> GTA5, GTA5 -> GTA V)
+          const subs = fs.readdirSync(dirPath, { withFileTypes: true });
+          for (const sub of subs) {
+            if (sub.isDirectory() && sub.name.toUpperCase().includes('GTA')) {
+              const subPath = path.join(dirPath, sub.name);
+              if (fileExistsWithAny(subPath, MARKER_FILES)) {
+                return { path: subPath, source: 'scan-name' };
+              }
+            }
+          }
+        }
+      }
+    }
+  } catch {}
+
+  // 5. Поиск libraryfolders.vdf напрямую на всех дисках
+  try {
+    const STEAM_ROOTS = ['Steam', 'Program Files (x86)\\Steam', 'Program Files\\Steam', 'games\\Steam'];
+    for (const drive of ['C:', 'D:', 'E:', 'F:', 'G:', 'H:']) {
+      if (!fs.existsSync(drive + '\\')) continue;
+      for (const root of STEAM_ROOTS) {
+        const vdfPath = path.join(drive + '\\', root, 'steamapps', 'libraryfolders.vdf');
+        if (fs.existsSync(vdfPath)) {
+          try {
+            const vdf = fs.readFileSync(vdfPath, 'utf-8');
+            const libMatches = vdf.match(/"path"\s+"([^"]+)"/g);
+            if (libMatches) {
+              for (const libMatch of libMatches) {
+                const libPath = libMatch.match(/"path"\s+"([^"]+)"/)[1];
+                const candidate = path.join(libPath.replace(/\\\\/g, '\\'), 'steamapps', 'common', 'Grand Theft Auto V');
+                if (fs.existsSync(candidate) && fileExistsWithAny(candidate, MARKER_FILES)) {
+                  return { path: candidate, source: 'steam-vdf' };
+                }
+              }
+            }
+          } catch {}
         }
       }
     }
@@ -454,58 +528,22 @@ ipcMain.handle('electron-install-mod', async (_evt, {
   logDebug('  ✅ Файл найден, размер:', fileStat.size, 'байт');
 
   // ═══════════════════════════════════════════════
-  // ОПРЕДЕЛЕНИЕ ЦЕЛЕВОЙ ПАПКИ
-  // Смотрим структуру архива. Если внутри есть GTA5-папки
-  // (update/, mods/, x64/, scripts/) — распаковываем в корень GTA5.
-  // Иначе — в папку по категории.
+  // ЦЕЛЕВАЯ ПАПКА ПО КАТЕГОРИИ
+  //   redux → <GTA5>\update\
+  //   guns  → <GTA5>\update\x64\dlcpacks\patchday18ng\
+  //   иное  → <GTA5>\
   // ═══════════════════════════════════════════════
 
-  const ext = findExtractor();
-  let TARGET = gtaPath; // корень GTA5 по умолчанию
+  const CATEGORY_TARGET = {
+    redux: path.join(gtaPath, 'update'),
+    guns: path.join(gtaPath, 'update', 'x64', 'dlcpacks', 'patchday18ng'),
+  };
+  const TARGET = CATEGORY_TARGET[category] || gtaPath;
 
-  if (ext) {
-    logDebug('  Определяю структуру архива...');
-    let listOut = '';
-    try {
-      if (ext.type === 'rar') {
-        listOut = execFileSync(ext.exe, ['lb', srcPath], { stdio: 'pipe', timeout: 15000 }).toString();
-      } else if (ext.type === '7z') {
-        listOut = execFileSync(ext.exe, ['l', srcPath, '-slt'], { stdio: 'pipe', timeout: 15000 }).toString();
-        // 7z l выводит подробно, нас интересуют только строки Path =
-        listOut = listOut.split('\n').filter(l => l.startsWith('Path = ')).map(l => l.slice(6).trim()).join('\n');
-      }
-    } catch {}
-
-    const entries = listOut.split('\n').map(l => l.trim()).filter(Boolean);
-    logDebug('  Записей в архиве:', entries.length);
-    if (entries.length > 0) logDebug('  Первые 20:', entries.slice(0, 20).join(', '));
-
-    // Определяем, есть ли GTA5-структура
-    const gtaFolders = ['update/', 'mods/', 'x64/', 'scripts/', 'common/', 'dlcpacks/'];
-    const hasGtaStructure = entries.some(e => gtaFolders.some(f => e.startsWith(f) || e.startsWith('\\' + f)));
-    const isLooseFile = entries.length <= 5 && entries.every(e => !e.includes('\\') && !e.includes('/'));
-
-    if (hasGtaStructure) {
-      TARGET = gtaPath;
-      logDebug('  Обнаружена структура GTA5 → распаковка в корень:', TARGET);
-    } else if (isLooseFile && category === 'guns') {
-      // Одиночные файлы для оружия → patchday18ng
-      TARGET = path.join(gtaPath, 'update', 'x64', 'dlcpacks', 'patchday18ng');
-      logDebug('  Одиночные файлы оружия → patchday18ng:', TARGET);
-    } else if (isLooseFile && category === 'redux') {
-      TARGET = path.join(gtaPath, 'update');
-      logDebug('  Одиночные файлы редукса → update:', TARGET);
-    } else {
-      logDebug('  Ничего не подошло → корень GTA5:', TARGET);
-    }
-  } else {
-    logDebug('  Экстрактор не найден → корень GTA5:', TARGET);
-  }
-
+  logDebug('  TARGET =', TARGET);
   if (!fs.existsSync(TARGET)) {
     fs.mkdirSync(TARGET, { recursive: true });
   }
-  logDebug('  TARGET =', TARGET);
 
   const lower = downloadFilename.toLowerCase();
   const opts = { stdio: 'pipe', timeout: 300000 };
@@ -704,18 +742,17 @@ ipcMain.handle('check-for-updates', async () => {
       );
       if (asset) {
         return {
-          hasUpdate: true,
+          status: 'available',
           version: latestVer,
           url: asset.browser_download_url,
-          size: asset.size,
-          name: asset.name,
+          releaseDate: release.published_at,
         };
       }
     }
-    return { hasUpdate: false };
+    return { status: 'not-available' };
   } catch (e) {
     logDebug('  Ошибка проверки:', e.message);
-    return { hasUpdate: false, error: e.message };
+    return { status: 'error', message: e.message };
   }
 });
 
