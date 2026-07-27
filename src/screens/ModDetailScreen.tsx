@@ -61,6 +61,7 @@ export default function ModDetailScreen({ mod, onBack }: Props) {
   const [errored, setErrored] = useState(false);
   const installingRef = useRef(false);
   const [currentImage, setCurrentImage] = useState(0);
+  const [selectedVariant, setSelectedVariant] = useState<string | null>(null);
 
   // Галерея: сначала главная обложка, потом галерея
   const gallery = [
@@ -107,7 +108,7 @@ export default function ModDetailScreen({ mod, onBack }: Props) {
       }
       // В Electron папка модов определяется автоматически
       setExtractProgress(0);
-      await installMod(fileName, mod.category, mod.id, (p) => {
+      await installMod(fileName, mod.category, mod.id, selectedVariant, (p) => {
         setExtractProgress(p.total > 0 ? Math.round((p.done / p.total) * 100) : 0);
       });
       setExtractProgress(null);
@@ -125,6 +126,12 @@ export default function ModDetailScreen({ mod, onBack }: Props) {
   }
 
   async function handleInstall() {
+    // Если есть варианты (цвета), но ещё не выбраны — не начинаем установку
+    if (mod.variants && mod.variants.length > 0 && !selectedVariant) {
+      notifications.push('info', 'Выберите вариант мода перед установкой.', 4000);
+      return;
+    }
+
     // Если URL ведёт на веб-страницу — открываем в браузере
     if (!isDirectFileUrl(mod.download_url)) {
       window.open(mod.download_url, '_blank');
@@ -289,6 +296,36 @@ export default function ModDetailScreen({ mod, onBack }: Props) {
             <div className="rounded-2xl bg-white/[0.03] border border-white/[0.06] p-4 flex items-center justify-between">
               <span className="text-xs font-bold text-white/40 uppercase tracking-widest">Размер</span>
               <span className="text-sm font-bold text-white">{mod.file_size_label}</span>
+            </div>
+          )}
+
+          {/* Варианты (цвета) */}
+          {mod.variants && mod.variants.length > 0 && (
+            <div className="rounded-2xl bg-white/[0.03] border border-white/[0.06] p-4">
+              <span className="text-xs font-bold text-white/40 uppercase tracking-widest mb-3 block">Выберите вариант</span>
+              <div className="flex flex-wrap gap-2">
+                {mod.variants.map((v) => {
+                  const active = selectedVariant === v.folder;
+                  return (
+                    <button
+                      key={v.folder}
+                      onClick={() => setSelectedVariant(v.folder)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border
+                        ${active
+                          ? 'bg-accent text-white border-accent shadow-[0_0_12px_rgba(255,8,68,0.4)]'
+                          : 'bg-white/[0.06] text-white/70 border-white/[0.10] hover:bg-white/[0.12] hover:text-white'
+                        }`}
+                    >
+                      {v.color && (
+                        <span className="inline-block w-3 h-3 rounded-full mr-1.5 align-middle"
+                          style={{ backgroundColor: v.color }}
+                        />
+                      )}
+                      {v.name}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 

@@ -509,7 +509,7 @@ function logDebug(...args) {
 }
 
 ipcMain.handle('electron-install-mod', async (_evt, {
-  downloadFilename, gtaPath, category, modId,
+  downloadFilename, gtaPath, category, modId, variantFolder,
 }) => {
   const srcDir = getDownloadsDir();
   const srcPath = path.join(srcDir, downloadFilename);
@@ -577,12 +577,15 @@ ipcMain.handle('electron-install-mod', async (_evt, {
     if (ext) {
       logDebug('  Тип: RAR → экстрактор:', ext.exe);
       let args;
+      const variantArg = variantFolder ? variantFolder + '\\*' : '*';
       if (ext.type === 'rar') {
-        args = ['x', '-o+', '-y', srcPath, '*', TARGET];
+        args = ['x', '-o+', '-y', srcPath, variantArg, TARGET];
       } else if (ext.type === '7z') {
-        args = ['x', srcPath, '-y', '-o' + TARGET];
+        args = variantFolder
+          ? ['x', srcPath, '-y', '-o' + TARGET, variantFolder + '\\*']
+          : ['x', srcPath, '-y', '-o' + TARGET];
       } else {
-        args = ['x', '-o+', '-y', srcPath, '*', TARGET];
+        args = ['x', '-o+', '-y', srcPath, variantArg, TARGET];
       }
       logDebug('  Аргументы:', JSON.stringify(args));
       const before = Date.now();
@@ -608,12 +611,15 @@ ipcMain.handle('electron-install-mod', async (_evt, {
       const archive = fs.existsSync(firstPart) ? firstPart : srcPath;
       logDebug('  Тип: .part.rar, архив:', archive);
       let args;
+      const partVariantArg = variantFolder ? variantFolder + '\\*' : '*';
       if (ext.type === 'rar') {
-        args = ['x', '-o+', '-y', archive, '*', TARGET];
+        args = ['x', '-o+', '-y', archive, partVariantArg, TARGET];
       } else if (ext.type === '7z') {
-        args = ['x', archive, '-y', '-o' + TARGET];
+        args = variantFolder
+          ? ['x', archive, '-y', '-o' + TARGET, variantFolder + '\\*']
+          : ['x', archive, '-y', '-o' + TARGET];
       } else {
-        args = ['x', '-o+', '-y', archive, '*', TARGET];
+        args = ['x', '-o+', '-y', archive, partVariantArg, TARGET];
       }
       execFileSync(ext.exe, args, opts);
       logDebug('  ✅ Распаковка .part.rar завершена');

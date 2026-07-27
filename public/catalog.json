@@ -3602,7 +3602,12 @@
       "downloads": 55,
       "author": "",
       "screenshots": [],
-      "local_images": []
+      "local_images": [],
+      "variants": [
+        {"name": "Красный", "folder": "Red", "color": "#ff4444"},
+        {"name": "Синий", "folder": "Blue", "color": "#4488ff"},
+        {"name": "Золотой", "folder": "Gold", "color": "#ffaa00"}
+      ]
     },
     {
       "id": 127,

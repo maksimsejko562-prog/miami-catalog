@@ -18,6 +18,7 @@ interface ElectronAPI {
     gtaPath: string;
     category: string;
     modId: string | number;
+    variantFolder?: string;
   }) => Promise<{ success: boolean; targetDir: string; extracted: boolean }>;
 }
 
@@ -148,6 +149,7 @@ export async function installMod(
   fileName: string,
   category: string,
   modId: string | number,
+  variantFolder?: string | null,
   onProgress?: (p: InstallProgress) => void,
 ): Promise<void> {
   // ═══ Electron: установка через IPC ═══
@@ -169,6 +171,7 @@ export async function installMod(
       gtaPath: gta.path,
       category,
       modId,
+      variantFolder: variantFolder || undefined,
     });
 
     if (!result.success) {

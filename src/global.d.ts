@@ -17,6 +17,8 @@ interface ElectronAPI {
     downloadFilename: string;
     category: string;
     gtaPath: string;
+    modId: string | number;
+    variantFolder?: string;
   }) => Promise<{ success: boolean; targetDir: string; extracted: boolean; error?: string }>;
   electronFileExists: (path: string) => Promise<boolean>;
   downloadAndInstallUpdate: (url: string) => Promise<{ success: boolean; exePath: string }>;
