@@ -455,9 +455,20 @@ ipcMain.handle('electron-install-mod', async (_evt, {
   }
 
   // ═══════════════════════════════════════════════
-  // УСТАНОВКА В КОРЕНЬ GTA 5
-  // Архив распаковывается прямо в папку игры.
+  // ВЫБОР ПУТИ ПО КАТЕГОРИИ
+  //   redux → <GTA5>\update\
+  //   guns  → <GTA5>\update\x64\dlcpacks\patchday18ng\
+  //   иное  → <GTA5>\update\
   // ═══════════════════════════════════════════════
+
+  const CATEGORY_TARGET = {
+    redux: path.join(gtaPath, 'update'),
+    guns: path.join(gtaPath, 'update', 'x64', 'dlcpacks', 'patchday18ng'),
+  };
+  const TARGET = CATEGORY_TARGET[category] || path.join(gtaPath, 'update');
+  if (!fs.existsSync(TARGET)) {
+    fs.mkdirSync(TARGET, { recursive: true });
+  }
 
   const lower = downloadFilename.toLowerCase();
   const opts = { stdio: 'pipe', timeout: 300000 };
@@ -467,25 +478,23 @@ ipcMain.handle('electron-install-mod', async (_evt, {
     try {
       execFileSync('powershell', [
         '-NoProfile', '-Command',
-        `Expand-Archive -Path '${srcPath.replace(/'/g, "''")}' -DestinationPath '${gtaPath.replace(/'/g, "''")}' -Force`
+        `Expand-Archive -Path '${srcPath.replace(/'/g, "''")}' -DestinationPath '${TARGET.replace(/'/g, "''")}' -Force`
       ], opts);
     } catch (e) {
-      // PowerShell有时会返回非零退出码但文件已解压，检查一下
-      if (!fs.existsSync(gtaPath)) throw e;
+      if (!fs.existsSync(TARGET)) throw e;
     }
-    return { success: true, targetDir: gtaPath, extracted: true };
+    return { success: true, targetDir: TARGET, extracted: true };
   }
 
   // 2) RAR (не .part) — WinRAR
   if (lower.endsWith('.rar') && !lower.includes('.part')) {
     const rarExe = getUnrarPath();
     if (rarExe) {
-      // ВАЖНО: НЕ добавлять trailing backslash — "path\" ломает парсинг Windows
-      execFileSync(rarExe, ['x', '-o+', '-y', srcPath, '*', gtaPath], opts);
-      return { success: true, targetDir: gtaPath, extracted: true };
+      execFileSync(rarExe, ['x', '-o+', '-y', srcPath, '*', TARGET], opts);
+      return { success: true, targetDir: TARGET, extracted: true };
     }
-    fs.copyFileSync(srcPath, path.join(gtaPath, path.basename(downloadFilename)));
-    return { success: true, targetDir: gtaPath, extracted: false };
+    fs.copyFileSync(srcPath, path.join(TARGET, path.basename(downloadFilename)));
+    return { success: true, targetDir: TARGET, extracted: false };
   }
 
   // 3) .part.rar — WinRAR (первый том)
@@ -494,16 +503,16 @@ ipcMain.handle('electron-install-mod', async (_evt, {
     if (rarExe) {
       const firstPart = srcPath.replace(/\.part\d+\.rar$/i, '.part1.rar');
       const archive = fs.existsSync(firstPart) ? firstPart : srcPath;
-      execFileSync(rarExe, ['x', '-o+', '-y', archive, '*', gtaPath], opts);
-      return { success: true, targetDir: gtaPath, extracted: true };
+      execFileSync(rarExe, ['x', '-o+', '-y', archive, '*', TARGET], opts);
+      return { success: true, targetDir: TARGET, extracted: true };
     }
-    fs.copyFileSync(srcPath, path.join(gtaPath, path.basename(downloadFilename)));
-    return { success: true, targetDir: gtaPath, extracted: false };
+    fs.copyFileSync(srcPath, path.join(TARGET, path.basename(downloadFilename)));
+    return { success: true, targetDir: TARGET, extracted: false };
   }
 
-  // 4) Прочее (.rpf, .oiv, .7z, .dll) — копируем в корень
-  fs.copyFileSync(srcPath, path.join(gtaPath, path.basename(downloadFilename)));
-  return { success: true, targetDir: gtaPath, extracted: false };
+  // 4) Прочее (.rpf, .oiv, .7z, .dll) — копируем в TARGET
+  fs.copyFileSync(srcPath, path.join(TARGET, path.basename(downloadFilename)));
+  return { success: true, targetDir: TARGET, extracted: false };
 });
 
 ipcMain.handle('electron-check-gta-path', () => {
