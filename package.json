@@ -51,7 +51,7 @@
       "electron/**/*"
     ],
     "directories": {
-      "output": "build-fix1"
+      "output": "build-v6"
     },
     "win": {
       "target": [

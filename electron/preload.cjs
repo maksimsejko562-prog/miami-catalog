@@ -17,6 +17,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Обновления
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
+  downloadAndInstallUpdate: (url) => ipcRenderer.invoke('download-and-install-update', url),
+  onUpdateAvailable: (callback) => {
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on('update-available', handler);
+    return () => ipcRenderer.removeListener('update-available', handler);
+  },
 
   // --- Скачивание ---
   // Скачать файл (сохраняется в %APPDATA%/MiamiGraphics/)

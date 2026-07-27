@@ -511,17 +511,54 @@ ipcMain.handle('electron-install-mod', async (_evt, {
   logDebug('  ✅ Файл найден, размер:', fileStat.size, 'байт');
 
   // ═══════════════════════════════════════════════
-  // ВЫБОР ПУТИ ПО КАТЕГОРИИ
-  //   redux → <GTA5>\update\
-  //   guns  → <GTA5>\update\x64\dlcpacks\patchday18ng\
-  //   иное  → <GTA5>\update\
+  // ОПРЕДЕЛЕНИЕ ЦЕЛЕВОЙ ПАПКИ
+  // Смотрим структуру архива. Если внутри есть GTA5-папки
+  // (update/, mods/, x64/, scripts/) — распаковываем в корень GTA5.
+  // Иначе — в папку по категории.
   // ═══════════════════════════════════════════════
 
-  const CATEGORY_TARGET = {
-    redux: path.join(gtaPath, 'update'),
-    guns: path.join(gtaPath, 'update', 'x64', 'dlcpacks', 'patchday18ng'),
-  };
-  const TARGET = CATEGORY_TARGET[category] || path.join(gtaPath, 'update');
+  const ext = findExtractor();
+  let TARGET = gtaPath; // корень GTA5 по умолчанию
+
+  if (ext) {
+    logDebug('  Определяю структуру архива...');
+    let listOut = '';
+    try {
+      if (ext.type === 'rar') {
+        listOut = execFileSync(ext.exe, ['lb', srcPath], { stdio: 'pipe', timeout: 15000 }).toString();
+      } else if (ext.type === '7z') {
+        listOut = execFileSync(ext.exe, ['l', srcPath, '-slt'], { stdio: 'pipe', timeout: 15000 }).toString();
+        // 7z l выводит подробно, нас интересуют только строки Path =
+        listOut = listOut.split('\n').filter(l => l.startsWith('Path = ')).map(l => l.slice(6).trim()).join('\n');
+      }
+    } catch {}
+
+    const entries = listOut.split('\n').map(l => l.trim()).filter(Boolean);
+    logDebug('  Записей в архиве:', entries.length);
+    if (entries.length > 0) logDebug('  Первые 20:', entries.slice(0, 20).join(', '));
+
+    // Определяем, есть ли GTA5-структура
+    const gtaFolders = ['update/', 'mods/', 'x64/', 'scripts/', 'common/', 'dlcpacks/'];
+    const hasGtaStructure = entries.some(e => gtaFolders.some(f => e.startsWith(f) || e.startsWith('\\' + f)));
+    const isLooseFile = entries.length <= 5 && entries.every(e => !e.includes('\\') && !e.includes('/'));
+
+    if (hasGtaStructure) {
+      TARGET = gtaPath;
+      logDebug('  Обнаружена структура GTA5 → распаковка в корень:', TARGET);
+    } else if (isLooseFile && category === 'guns') {
+      // Одиночные файлы для оружия → patchday18ng
+      TARGET = path.join(gtaPath, 'update', 'x64', 'dlcpacks', 'patchday18ng');
+      logDebug('  Одиночные файлы оружия → patchday18ng:', TARGET);
+    } else if (isLooseFile && category === 'redux') {
+      TARGET = path.join(gtaPath, 'update');
+      logDebug('  Одиночные файлы редукса → update:', TARGET);
+    } else {
+      logDebug('  Ничего не подошло → корень GTA5:', TARGET);
+    }
+  } else {
+    logDebug('  Экстрактор не найден → корень GTA5:', TARGET);
+  }
+
   if (!fs.existsSync(TARGET)) {
     fs.mkdirSync(TARGET, { recursive: true });
   }
@@ -648,6 +685,42 @@ app.whenReady().then(async () => {
     await startStaticServer();
   }
   createWindow();
+
+  // Автопроверка обновлений через 3 секунды после запуска
+  setTimeout(async () => {
+    try {
+      logDebug('Автопроверка обновлений...');
+      const https = require('https');
+      const url = 'https://api.github.com/repos/maksimsejko562-prog/miami-mods/releases/latest';
+      const data = await new Promise((resolve, reject) => {
+        https.get(url, { headers: { 'User-Agent': 'MiamiLauncher/' + CURRENT_VERSION } }, (res) => {
+          let body = '';
+          res.on('data', c => body += c);
+          res.on('end', () => resolve(body));
+        }).on('error', reject);
+      });
+      const release = JSON.parse(data);
+      const tag = release.tag_name || '';
+      const latestVer = tag.startsWith('v') ? tag.slice(1) : tag;
+      logDebug('  Текущая:', CURRENT_VERSION, 'Последняя:', latestVer);
+      if (latestVer && latestVer !== CURRENT_VERSION) {
+        const asset = (release.assets || []).find(a => a.name && a.name.endsWith('.exe') && a.name.includes('Setup'));
+        if (asset) {
+          const win = BrowserWindow.getAllWindows()[0];
+          if (win) {
+            win.webContents.send('update-available', {
+              version: latestVer,
+              url: asset.browser_download_url,
+              size: asset.size,
+              name: asset.name,
+            });
+          }
+        }
+      }
+    } catch (e) {
+      logDebug('  Ошибка автопроверки:', e.message);
+    }
+  }, 3000);
 });
 
 app.on('window-all-closed', () => {
@@ -660,4 +733,90 @@ app.on('window-all-closed', () => {
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
+});
+
+// ─── Автообновление ─────────────────────────────────────────────────
+// Проверка новой версии на GitHub
+
+const CURRENT_VERSION = app.getVersion(); // из package.json
+
+ipcMain.handle('check-for-updates', async () => {
+  logDebug('Проверка обновления, текущая версия:', CURRENT_VERSION);
+  try {
+    const https = require('https');
+    const url = 'https://api.github.com/repos/maksimsejko562-prog/miami-mods/releases/latest';
+    const data = await new Promise((resolve, reject) => {
+      https.get(url, { headers: { 'User-Agent': 'MiamiLauncher/' + CURRENT_VERSION } }, (res) => {
+        let body = '';
+        res.on('data', c => body += c);
+        res.on('end', () => resolve(body));
+      }).on('error', reject);
+    });
+    const release = JSON.parse(data);
+    const tag = release.tag_name || '';
+    const latestVer = tag.startsWith('v') ? tag.slice(1) : tag;
+    logDebug('  Последняя версия на GitHub:', latestVer);
+
+    if (latestVer && latestVer !== CURRENT_VERSION) {
+      // Ищем asset-установщик
+      const asset = (release.assets || []).find(a =>
+        a.name && a.name.endsWith('.exe') && a.name.includes('Setup')
+      );
+      if (asset) {
+        return {
+          hasUpdate: true,
+          version: latestVer,
+          url: asset.browser_download_url,
+          size: asset.size,
+          name: asset.name,
+        };
+      }
+    }
+    return { hasUpdate: false };
+  } catch (e) {
+    logDebug('  Ошибка проверки:', e.message);
+    return { hasUpdate: false, error: e.message };
+  }
+});
+
+ipcMain.handle('download-and-install-update', async (_evt, url) => {
+  logDebug('Скачиваю обновление:', url);
+  const tmpDir = require('os').tmpdir();
+  const destPath = path.join(tmpDir, 'MiamiLauncher-Update.exe');
+
+  return new Promise((resolve, reject) => {
+    const https = require('https');
+    const file = fs.createWriteStream(destPath);
+    https.get(url, { headers: { 'User-Agent': 'MiamiLauncher/' + CURRENT_VERSION } }, (res) => {
+      // Следуем редиректам
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        let next = res.headers.location;
+        if (next.startsWith('/')) {
+          const u = new URL(url);
+          next = u.protocol + '//' + u.host + next;
+        }
+        https.get(next, { headers: { 'User-Agent': 'MiamiLauncher/' + CURRENT_VERSION } }, (r2) => {
+          r2.pipe(file);
+          file.on('finish', () => {
+            file.close();
+            logDebug('  Обновление скачано, запускаю...');
+            require('child_process').execFile(destPath, ['/SILENT', '/CLOSEAPPLICATIONS'], (err) => {
+              if (err) reject(err);
+              else app.quit();
+            });
+          });
+        });
+        return;
+      }
+      res.pipe(file);
+      file.on('finish', () => {
+        file.close();
+        logDebug('  Обновление скачано, запускаю...');
+        require('child_process').execFile(destPath, ['/SILENT', '/CLOSEAPPLICATIONS'], (err) => {
+          if (err) reject(err);
+          else app.quit();
+        });
+      });
+    }).on('error', reject);
+  });
 });
